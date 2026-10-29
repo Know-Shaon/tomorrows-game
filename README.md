@@ -2,9 +2,13 @@
 
 “Suggest it today. Vote tonight. Play it tomorrow.”
 
-A polished local prototype of a mobile-first daily browser arcade. The current build rotates seven safe daily games across seven deterministic mechanics (`defense-v1`, `dodge-v1`, `tap-v1`, `classify-v1`, `timing-v1`, `sequence-v1`, and `sort-v1`), with distinct controls and Canvas scenes, local personal bests, a clearly labelled demo leaderboard, device-only voting and suggestions, and a Canvas result card.
+A polished local prototype of a mobile-first daily browser arcade. The current build rotates seven safe daily games across seven deterministic mechanics (`defense-v1`, `dodge-v1`, `tap-v1`, `classify-v1`, `timing-v1`, `sequence-v1`, and `sort-v1`), with eased difficulty phases, distinct controls and Canvas scenes, optional synthesized WebAudio feedback, near-instant retry, local personal bests, a clearly labelled demo leaderboard, device-only voting and suggestions, and a Canvas result card.
+
+Milestone 2.3 adds a cohesive dark editorial art direction, richer generated key art for every game, material and lighting detail inside gameplay scenes, compact result hierarchy, responsive surface composition, and reduced-motion-safe polish. All art remains local Canvas/CSS with no image payload or new dependency.
 
 ## Run locally
+
+Milestone 2.4 removes answer hints, separates titles from art, reduces copy, moves controls into scenes, adds ambient motion, and evaluates an opt-in Laundry WebGL pilot. See `docs/MILESTONE_2_4_AUDIT.md` and `docs/MILESTONE_2_4_REPORT.md` for evidence and limits. The default renderer remains Canvas.
 
 Requirements: Node.js 22+ and npm.
 
@@ -27,7 +31,7 @@ npm run test:e2e
 git diff --check
 ```
 
-Playwright uses the locally installed Chrome channel. The development-only `?e2e=1` route exposes a deterministic “Finish demo run” control for fast end-to-end coverage; it is removed from production builds.
+Playwright uses the locally installed Chrome channel. Development builds include a compact local playtest panel; the `?e2e=1` route also exposes a deterministic “Finish demo run” control. Both are removed from production builds.
 
 ## Structure
 
@@ -47,7 +51,8 @@ Playwright uses the locally installed Chrome channel. The development-only `?e2e
 - ESLint, the TypeScript/React plugins and Prettier enforce source quality and formatting.
 - Vitest, jsdom and Testing Library cover deterministic logic and component behaviour.
 - Playwright covers the real desktop and mobile browser journeys.
+- PixiJS 8.18.1 is a development dependency for the reproducible Laundry GPU experiment. Add `&pixi=1` in development after selecting Laundry; ordinary production includes no Pixi code. `npm run build -- --mode renderer-pilot` measures the optional bundle. Run a normal build afterward.
 
 ## Prototype honesty
 
-Community names, scores and vote percentages are demo data. Votes, preferences, personal bests and suggestions use versioned localStorage and stay on the current device. A saved suggestion is not a public submission, and the local preview URL is not a public friend-challenge link.
+Community names, scores and vote percentages are demo data. Votes, sound preference, personal bests and suggestions use versioned localStorage and stay on the current device. Development playtest summaries use a separate local-only key. A saved suggestion is not a public submission, and the local preview URL is not a public friend-challenge link.

@@ -3,6 +3,7 @@ import { DAILY_CONFIGS, type DailyGameConfig } from '@shared/game';
 import { DailyPoster } from './DailyPoster';
 
 interface TodayPageProps {
+  hasPlayedToday: boolean;
   config: DailyGameConfig;
   challengeNumber: number;
   countdown: string;
@@ -95,7 +96,6 @@ export function TodayPage(props: TodayPageProps) {
           </span>
           <span>Tomorrow’s Game</span>
         </a>
-        <p className="ritual-line">One tiny new game on the internet every day.</p>
         <div className="header-stats">
           <span>#{challengeNumber}</span>
           <span>
@@ -111,7 +111,6 @@ export function TodayPage(props: TodayPageProps) {
         <div className="drop-copy">
           <p className="eyebrow">TODAY’S DROP · #{challengeNumber}</p>
           <h1 id="challenge-title">{config.title}</h1>
-          <p className="drop-summary">{config.summary}</p>
           <div className="drop-facts">
             <span>{config.durationSeconds} seconds</span>
             <span>{config.interaction}</span>
@@ -119,11 +118,9 @@ export function TodayPage(props: TodayPageProps) {
           <button className="play-button giant-play" type="button" onClick={onPlay}>
             PLAY <span aria-hidden="true">▶</span>
           </button>
-          <p className="creator">Idea by {config.creator}</p>
         </div>
         <div className="poster-wrap">
           <DailyPoster config={config} />
-          <span className="poster-caption">{config.instruction}</span>
         </div>
       </section>
 
@@ -139,106 +136,94 @@ export function TodayPage(props: TodayPageProps) {
             {streak} day{streak === 1 ? '' : 's'}
           </strong>
         </div>
-        <p>{bestScore ? 'Your score is ready for another run.' : 'Your first score is waiting.'}</p>
       </section>
 
-      <section className="tomorrow-section" id="vote" aria-labelledby="vote-title">
-        <div className="tomorrow-heading">
-          <div>
-            <p className="eyebrow">TOMORROW IS UP FOR DEBATE</p>
-            <h2 id="vote-title">Pick the next tiny problem.</h2>
-          </div>
-          <p>Three concepts. One local vote. Demo percentages for now.</p>
-        </div>
-        <form onSubmit={submitVote}>
-          <fieldset className="vote-grid">
-            <legend className="sr-only">Choose one future game idea</legend>
-            {VOTE_CANDIDATES.map((candidate, index) => (
-              <label
-                className={`vote-ticket${vote === candidate.id ? ' selected' : ''}`}
-                key={candidate.id}
-              >
-                <input
-                  type="radio"
-                  name="future-game"
-                  value={candidate.id}
-                  checked={vote === candidate.id}
-                  onChange={() => setVote(candidate.id)}
-                />
-                <span className="ticket-number">0{index + 1}</span>
-                <strong>{candidate.title}</strong>
-                <small>{candidate.pitch}</small>
-                <span
-                  className="demo-percent"
-                  aria-label={`${candidate.demoPercent} percent demo result`}
-                >
-                  {candidate.demoPercent}% demo
+      {props.hasPlayedToday && (
+        <>
+          <section className="tomorrow-section" id="vote" aria-labelledby="vote-title">
+            <div className="tomorrow-heading">
+              <div>
+                <h2 id="vote-title">Pick tomorrow.</h2>
+                <p className="prototype-note">Votes and ideas stay on this device.</p>
+              </div>
+            </div>
+            <form onSubmit={submitVote}>
+              <fieldset className="vote-grid">
+                <legend className="sr-only">Choose one future game idea</legend>
+                {VOTE_CANDIDATES.map((candidate, index) => (
+                  <label
+                    className={`vote-ticket${vote === candidate.id ? ' selected' : ''}`}
+                    key={candidate.id}
+                  >
+                    <input
+                      type="radio"
+                      name="future-game"
+                      value={candidate.id}
+                      checked={vote === candidate.id}
+                      onChange={() => setVote(candidate.id)}
+                    />
+                    <span className="ticket-number">0{index + 1}</span>
+                    <strong>{candidate.title}</strong>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="vote-footer">
+                <button className="vote-button" type="submit">
+                  Vote →
+                </button>
+                <span className="form-message" aria-live="polite">
+                  {voteMessage}
                 </span>
-              </label>
-            ))}
-          </fieldset>
-          <div className="vote-footer">
-            <button className="vote-button" type="submit">
-              Lock my local vote →
-            </button>
-            <span className="prototype-note">Prototype: saved on this device only.</span>
-            <span className="form-message" aria-live="polite">
-              {voteMessage}
-            </span>
-          </div>
-        </form>
-      </section>
+              </div>
+            </form>
+          </section>
 
-      <section className="suggestion-strip" aria-labelledby="suggestion-title">
-        <div>
-          <p className="eyebrow">GOT A STRANGE LITTLE GAME?</p>
-          <h2 id="suggestion-title">Suggest tomorrow’s distraction.</h2>
-        </div>
-        <form className="suggestion-form" onSubmit={submitSuggestion}>
-          <label htmlFor="game-idea">One-sentence game idea</label>
-          <textarea
-            id="game-idea"
-            value={suggestion}
-            minLength={8}
-            maxLength={240}
-            rows={3}
-            placeholder="Catch falling chai cups before the train arrives."
-            onChange={(event) => setSuggestion(event.target.value)}
-          />
-          <div className="form-row">
-            <small>{suggestion.length}/240 · No personal info.</small>
-            <button className="suggest-button" type="submit">
-              Keep idea locally ＋
-            </button>
-          </div>
-          <p className="prototype-note">
-            Saved only on this device. Nothing is submitted to a server.
-          </p>
-          <p className="form-message" aria-live="polite">
-            {suggestionMessage}
-          </p>
-        </form>
-      </section>
+          <section className="suggestion-strip" aria-labelledby="suggestion-title">
+            <div>
+              <h2 id="suggestion-title">Suggest a game.</h2>
+            </div>
+            <form className="suggestion-form" onSubmit={submitSuggestion}>
+              <label htmlFor="game-idea">One-sentence game idea</label>
+              <textarea
+                id="game-idea"
+                value={suggestion}
+                minLength={8}
+                maxLength={240}
+                rows={3}
+                placeholder="Catch falling chai cups before the train arrives."
+                onChange={(event) => setSuggestion(event.target.value)}
+              />
+              <div className="form-row">
+                <small>{suggestion.length}/240 · No personal info.</small>
+                <button className="suggest-button" type="submit">
+                  Save idea ＋
+                </button>
+              </div>
+              <p className="form-message" aria-live="polite">
+                {suggestionMessage}
+              </p>
+            </form>
+          </section>
 
-      <details className="leaderboard-drawer">
-        <summary>
-          <span>
-            <b>Demo leaderboard</b>
-            <small>Not live players</small>
-          </span>
-          <span>See scores ↓</span>
-        </summary>
-        <ol>
-          {LEADERBOARD.map((entry) => (
-            <li key={entry.name}>
-              <span>{entry.rank.toString().padStart(2, '0')}</span>
-              <b>{entry.name}</b>
-              <strong>{entry.score.toLocaleString()}</strong>
-            </li>
-          ))}
-        </ol>
-        <p className="prototype-note">All names and scores above are labelled demo data.</p>
-      </details>
+          <details className="leaderboard-drawer">
+            <summary>
+              <span>
+                <b>Leaderboard · demo</b>
+              </span>
+              <span>Open ↓</span>
+            </summary>
+            <ol>
+              {LEADERBOARD.map((entry) => (
+                <li key={entry.name}>
+                  <span>{entry.rank.toString().padStart(2, '0')}</span>
+                  <b>{entry.name}</b>
+                  <strong>{entry.score.toLocaleString()}</strong>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </>
+      )}
 
       {import.meta.env.DEV && (
         <aside className="dev-switcher" aria-label="Development tools">
@@ -266,7 +251,6 @@ export function TodayPage(props: TodayPageProps) {
       <footer className="site-footer">
         <div>
           <strong>Tomorrow’s Game</strong>
-          <p>Come back when the clock hits zero.</p>
         </div>
         <nav aria-label="Footer">
           <a href="#rules">Rules</a>

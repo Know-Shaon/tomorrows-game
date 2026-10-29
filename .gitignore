@@ -23,5 +23,6 @@ test-results/
 .idea/
 .vscode/
 /screenshots/
+/outputs/
 .DS_Store
 Thumbs.db

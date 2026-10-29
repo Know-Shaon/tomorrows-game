@@ -4,9 +4,10 @@ interface EngineControlsProps {
   config: DailyGameConfig;
   state: DailyGameState;
   onAction: (input: DailyGameInput) => void;
+  showHint?: boolean;
 }
 
-export function EngineControls({ config, state, onAction }: EngineControlsProps) {
+export function EngineControls({ config, state, onAction, showHint = true }: EngineControlsProps) {
   if (config.engine === 'dodge-v1') {
     return (
       <div
@@ -38,7 +39,7 @@ export function EngineControls({ config, state, onAction }: EngineControlsProps)
         data-control="tap-defense"
         aria-label="Defense controls"
       >
-        <p>Tap pigeons on the rooftop · Space shoos the nearest</p>
+        {showHint && <p>Tap a pigeon · Space</p>}
       </div>
     );
   }
@@ -49,7 +50,7 @@ export function EngineControls({ config, state, onAction }: EngineControlsProps)
         data-control="tap-target"
         aria-label="Target controls"
       >
-        <p>Tap mosquitoes directly · Leave desk objects alone</p>
+        {showHint && <p>Tap the mosquito · Space</p>}
       </div>
     );
   }
@@ -63,16 +64,18 @@ export function EngineControls({ config, state, onAction }: EngineControlsProps)
         <button
           className="good-control"
           type="button"
+          aria-label="Keep message, keyboard K"
           onClick={() => onAction({ engine: 'classify-v1', choice: 'keep' })}
         >
-          KEEP <small>K</small>
+          <span aria-hidden="true">✓</span> KEEP <small>K</small>
         </button>
         <button
           className="bad-control"
           type="button"
+          aria-label="Trash message, keyboard T"
           onClick={() => onAction({ engine: 'classify-v1', choice: 'trash' })}
         >
-          TRASH <small>T</small>
+          <span aria-hidden="true">×</span> TRASH <small>T</small>
         </button>
       </div>
     );
@@ -87,7 +90,12 @@ export function EngineControls({ config, state, onAction }: EngineControlsProps)
         <button
           className="stop-button"
           type="button"
-          onClick={() => onAction({ engine: 'timing-v1', stop: true })}
+          onClick={() =>
+            onAction({
+              engine: 'timing-v1',
+              stopAtSeconds: state.engine === 'timing-v1' ? state.timerSeconds : null,
+            })
+          }
         >
           STOP <small>SPACE</small>
         </button>
@@ -121,16 +129,18 @@ export function EngineControls({ config, state, onAction }: EngineControlsProps)
       <button
         className="light-control"
         type="button"
+        aria-label={`${config.leftLabel} basket, pale dot pattern, keyboard L`}
         onClick={() => onAction({ engine: 'sort-v1', choice: 'left' })}
       >
-        {config.leftLabel} <small>L</small>
+        <span aria-hidden="true">☀ •••</span> {config.leftLabel} <small>L</small>
       </button>
       <button
         className="dark-control"
         type="button"
+        aria-label={`${config.rightLabel} basket, deep stripe pattern, keyboard D`}
         onClick={() => onAction({ engine: 'sort-v1', choice: 'right' })}
       >
-        {config.rightLabel} <small>D</small>
+        <span aria-hidden="true">☾ ///</span> {config.rightLabel} <small>D</small>
       </button>
     </div>
   );

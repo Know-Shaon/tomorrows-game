@@ -2,6 +2,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
   getDefenseThreatPosition,
+  getTapTargetPosition,
   type ClassifyConfig,
   type ClassifyState,
   type DailyGameConfig,
@@ -22,6 +23,7 @@ import {
   type TimingConfig,
   type TimingState,
 } from '@shared/game';
+import { samosa } from '@frontend/lib/scene-art';
 
 export type RendererId =
   | 'samosa-defense'
@@ -42,12 +44,42 @@ const COLORS = {
   green: '#7de3a1',
 };
 
+// Keep props undistorted while their world positions fill a portrait stage.
+function preserveObjectAspect(context: CanvasRenderingContext2D, x: number, y: number): void {
+  const transform = context.getTransform();
+  const ratio = Math.hypot(transform.a, transform.b) / Math.hypot(transform.c, transform.d);
+  context.translate(x, y);
+  context.scale(1, Math.min(1, ratio));
+  context.translate(-x, -y);
+}
+
 function fillBackground(context: CanvasRenderingContext2D, top: string, bottom: string): void {
   const gradient = context.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
   gradient.addColorStop(0, top);
   gradient.addColorStop(1, bottom);
   context.fillStyle = gradient;
   context.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+}
+
+function finishScene(context: CanvasRenderingContext2D, accent: string): void {
+  context.save();
+  const vignette = context.createRadialGradient(500, 430, 250, 500, 500, 720);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,8,18,0.34)');
+  context.fillStyle = vignette;
+  context.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  context.globalAlpha = 0.12;
+  context.fillStyle = COLORS.cream;
+  for (let index = 0; index < 86; index += 1) {
+    const x = (index * 193 + 47) % WORLD_WIDTH;
+    const y = (index * 109 + 23) % WORLD_HEIGHT;
+    context.fillRect(x, y, index % 4 === 0 ? 3 : 2, 2);
+  }
+  context.globalAlpha = 0.42;
+  context.strokeStyle = accent;
+  context.lineWidth = 4;
+  context.strokeRect(12, 12, WORLD_WIDTH - 24, WORLD_HEIGHT - 24);
+  context.restore();
 }
 
 function label(
@@ -58,11 +90,16 @@ function label(
   size: number,
   color = COLORS.cream,
 ): void {
+  context.save();
+  const transform = context.getTransform();
+  context.translate(x, y);
+  context.scale(1, Math.min(1, Math.abs(transform.a / transform.d)));
   context.fillStyle = color;
   context.font = `900 ${size}px system-ui`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.fillText(text, x, y);
+  context.fillText(text, 0, 0);
+  context.restore();
 }
 
 function drawPigeon(
@@ -71,9 +108,13 @@ function drawPigeon(
   y: number,
   scale: number,
   angle: number,
+  wingPhase: number,
 ): void {
   context.save();
   context.translate(x, y);
+  const transform = context.getTransform();
+  const ratio = Math.hypot(transform.a, transform.b) / Math.hypot(transform.c, transform.d);
+  context.scale(1, Math.min(1, ratio));
   context.rotate(angle + Math.PI);
   context.scale(scale, scale);
   context.fillStyle = '#43566e';
@@ -84,9 +125,10 @@ function drawPigeon(
   context.fill();
   context.stroke();
   context.fillStyle = '#6f849b';
+  const wingLift = Math.sin(wingPhase) * 28;
   context.beginPath();
   context.moveTo(-8, -5);
-  context.quadraticCurveTo(-65, -65, -84, 0);
+  context.quadraticCurveTo(-65, -65 - wingLift, -84, wingLift * -0.35);
   context.quadraticCurveTo(-42, -20, -5, 13);
   context.fill();
   context.stroke();
@@ -137,7 +179,18 @@ function feedbackEffects(
       context.fill();
     }
   }
-  label(context, state.feedback === 'good' ? 'NICE!' : 'OOPS!', 500, 115, 52, color);
+  let message = state.feedback === 'good' ? 'NICE!' : 'OOPS!';
+  if (state.engine === 'defense-v1') message = state.feedback === 'good' ? 'SHOO!' : 'SNACK HIT!';
+  else if (state.engine === 'dodge-v1') message = state.feedback === 'good' ? 'CLEAR!' : 'BUMP!';
+  else if (state.engine === 'tap-v1') message = state.feedback === 'good' ? 'SPLAT!' : 'MISSED!';
+  else if (state.engine === 'classify-v1')
+    message = state.feedback === 'good' ? 'SORTED!' : 'WRONG CALL!';
+  else if (state.engine === 'timing-v1') message = state.lastRating?.toUpperCase() ?? message;
+  else if (state.engine === 'sequence-v1')
+    message = state.feedback === 'good' ? 'CHIME!' : 'MISSED CUE!';
+  else if (state.engine === 'sort-v1')
+    message = state.feedback === 'good' ? 'IN THE BASKET!' : 'WRONG BASKET!';
+  label(context, message, 500, 115, 52, color);
   context.restore();
 }
 
@@ -145,13 +198,24 @@ function drawDefense(
   context: CanvasRenderingContext2D,
   config: DefenseConfig,
   state: DefenseState,
+  reducedMotion: boolean,
 ): void {
   fillBackground(context, '#f2a86f', '#ffd07a');
+  const sun = context.createRadialGradient(775, 105, 10, 775, 105, 145);
+  sun.addColorStop(0, 'rgba(255,245,198,0.95)');
+  sun.addColorStop(0.35, 'rgba(255,218,115,0.68)');
+  sun.addColorStop(1, 'rgba(255,174,94,0)');
+  context.fillStyle = sun;
+  context.fillRect(610, 0, 330, 290);
   context.fillStyle = '#d9674b';
   context.fillRect(0, 150, 1_000, 210);
   context.fillStyle = '#754d45';
   for (let x = 25; x < 1_000; x += 115) {
     context.fillRect(x, 185 + ((x / 115) % 2) * 30, 80, 120);
+    context.fillStyle = 'rgba(255,222,125,0.55)';
+    context.fillRect(x + 16, 218 + ((x / 115) % 2) * 30, 12, 18);
+    context.fillRect(x + 48, 254 + ((x / 115) % 2) * 30, 12, 18);
+    context.fillStyle = '#754d45';
   }
   context.fillStyle = '#2e6d6a';
   context.fillRect(0, 360, 1_000, 640);
@@ -163,6 +227,8 @@ function drawDefense(
     context.lineTo(x + 250, 1_000);
     context.stroke();
   }
+  context.save();
+  preserveObjectAspect(context, 500, 550);
   context.fillStyle = COLORS.cream;
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 15;
@@ -170,28 +236,67 @@ function drawDefense(
   context.ellipse(500, 550, 155, 95, 0, 0, Math.PI * 2);
   context.fill();
   context.stroke();
-  context.fillStyle = COLORS.yellow;
+  context.strokeStyle = 'rgba(255,255,255,0.62)';
+  context.lineWidth = 8;
   context.beginPath();
-  context.moveTo(500, 420);
-  context.lineTo(620, 635);
-  context.lineTo(380, 635);
-  context.closePath();
-  context.fill();
+  context.ellipse(475, 520, 100, 46, -0.2, Math.PI, Math.PI * 1.8);
   context.stroke();
-  context.fillStyle = '#529447';
-  for (const [x, y] of [
-    [476, 540],
-    [530, 575],
-    [500, 500],
-  ] as const) {
+  samosa(context, 500, 530, 1);
+  context.fillStyle = '#c69048';
+  for (let crumb = 0; crumb < 13; crumb += 1) {
     context.beginPath();
-    context.arc(x, y, 9, 0, Math.PI * 2);
+    context.ellipse(
+      365 + ((crumb * 31) % 270),
+      610 + ((crumb * 13) % 60),
+      4,
+      2,
+      crumb,
+      0,
+      Math.PI * 2,
+    );
     context.fill();
   }
+  context.strokeStyle = 'rgba(247,239,220,0.72)';
+  context.lineWidth = 7;
+  const steamSway = reducedMotion ? 0 : Math.sin(state.tick * 0.16) * 18;
+  for (const offset of [-48, 35]) {
+    context.beginPath();
+    context.moveTo(500 + offset, 440);
+    context.bezierCurveTo(
+      475 + offset + steamSway,
+      400,
+      530 + offset - steamSway,
+      365,
+      500 + offset,
+      325,
+    );
+    context.stroke();
+  }
+  context.restore();
   for (const threat of state.threats) {
     const position = getDefenseThreatPosition(threat, state.tick);
     const scale = 0.55 + (650 - threat.distance) / 850;
-    drawPigeon(context, position.x, position.y, scale, threat.angle);
+    drawPigeon(
+      context,
+      position.x,
+      position.y,
+      scale,
+      threat.angle,
+      reducedMotion ? 0 : state.tick * 0.7 + threat.id,
+    );
+  }
+  const nearestThreat = state.threats.reduce<number | null>(
+    (nearest, threat) =>
+      nearest === null || threat.distance < nearest ? threat.distance : nearest,
+    null,
+  );
+  if (nearestThreat !== null && nearestThreat < 260) {
+    context.strokeStyle = COLORS.coral;
+    context.lineWidth = 12 + Math.max(0, 260 - nearestThreat) * 0.08;
+    context.beginPath();
+    context.arc(500, 550, 175, 0, Math.PI * 2);
+    context.stroke();
+    label(context, 'DANGER', 500, 700, 30, COLORS.coral);
   }
   context.fillStyle = 'rgba(7,23,43,0.86)';
   context.fillRect(24, 24, 300, 74);
@@ -217,12 +322,21 @@ function drawDodge(
   context: CanvasRenderingContext2D,
   config: DodgeConfig,
   state: DodgeState,
+  reducedMotion: boolean,
 ): void {
   fillBackground(context, '#67c8d8', '#efc57e');
+  context.fillStyle = 'rgba(255,236,158,0.78)';
+  context.beginPath();
+  context.arc(790, 95, 64, 0, Math.PI * 2);
+  context.fill();
   context.fillStyle = '#21485a';
   for (let x = 0; x < 1_000; x += 90) {
     const height = 90 + ((x * 17) % 150);
     context.fillRect(x, 250 - height, 72, height);
+    context.fillStyle = 'rgba(246,223,73,0.48)';
+    context.fillRect(x + 14, 205 - height, 10, 14);
+    context.fillRect(x + 45, 225 - height, 10, 14);
+    context.fillStyle = '#21485a';
   }
   context.fillStyle = '#39424b';
   context.beginPath();
@@ -232,6 +346,16 @@ function drawDodge(
   context.lineTo(30, 1_000);
   context.closePath();
   context.fill();
+  context.strokeStyle = 'rgba(255,255,255,0.18)';
+  context.lineWidth = 5;
+  const roadScroll = reducedMotion ? 0 : (state.tick * 7) % 96;
+  for (let stripe = -1; stripe < 8; stripe += 1) {
+    const y = 330 + stripe * 96 + roadScroll;
+    context.beginPath();
+    context.moveTo(350 - stripe * 40, y);
+    context.lineTo(650 + stripe * 40, y);
+    context.stroke();
+  }
   context.strokeStyle = COLORS.yellow;
   context.lineWidth = 14;
   context.setLineDash([58, 45]);
@@ -247,6 +371,8 @@ function drawDodge(
     const scale = 0.34 + wave.progress * 0.95;
     for (const lane of [0, 1, 2] as const) {
       const x = roadLaneX(lane, wave.progress);
+      context.save();
+      preserveObjectAspect(context, x, y);
       if (wave.hazards[lane]) {
         context.fillStyle = COLORS.navy;
         context.beginPath();
@@ -267,12 +393,20 @@ function drawDodge(
         context.stroke();
         label(context, '★', x, y, 34 * scale, COLORS.navy);
       }
+      context.restore();
     }
   }
   const playerX = roadLaneX(state.playerLanePosition, 0.82);
   context.save();
+  preserveObjectAspect(context, playerX, 830);
   context.translate(playerX, 830);
-  context.rotate(Math.sin(state.tick * 0.18) * 0.018);
+  const steeringLean = (state.targetLane - state.playerLanePosition) * 0.13;
+  const bump =
+    !reducedMotion && state.feedback === 'bad' && state.feedbackTicks > 0
+      ? state.feedbackTicks * 0.45
+      : 0;
+  context.translate(0, bump);
+  context.rotate(steeringLean);
   context.fillStyle = COLORS.coral;
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 12;
@@ -281,12 +415,27 @@ function drawDodge(
   context.fill();
   context.stroke();
   context.fillStyle = COLORS.cyan;
-  context.fillRect(-48, -54, 96, 47);
+  context.beginPath();
+  context.roundRect(-48, -54, 96, 47, 10);
+  context.fill();
+  context.fillStyle = 'rgba(255,255,255,0.66)';
+  context.fillRect(-39, -45, 12, 30);
   context.fillStyle = COLORS.yellow;
   context.beginPath();
   context.arc(-44, 67, 22, 0, Math.PI * 2);
   context.arc(44, 67, 22, 0, Math.PI * 2);
   context.fill();
+  if (!reducedMotion) {
+    context.strokeStyle = COLORS.navy;
+    context.lineWidth = 5;
+    const wheelAngle = state.tick * 0.38;
+    for (const x of [-44, 44]) {
+      context.beginPath();
+      context.moveTo(x - Math.cos(wheelAngle) * 16, 67 - Math.sin(wheelAngle) * 16);
+      context.lineTo(x + Math.cos(wheelAngle) * 16, 67 + Math.sin(wheelAngle) * 16);
+      context.stroke();
+    }
+  }
   context.restore();
   context.fillStyle = 'rgba(7,23,43,0.85)';
   context.fillRect(20, 20, 320, 82);
@@ -302,9 +451,12 @@ function drawTapToken(
   x: number,
   y: number,
   radius: number,
+  wingPhase: number,
 ): void {
   context.save();
   context.translate(x, y);
+  const transform = context.getTransform();
+  context.scale(1, Math.min(1, Math.abs(transform.a / transform.d)));
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 9;
   if (token === 'mosquito') {
@@ -315,14 +467,15 @@ function drawTapToken(
     context.stroke();
     context.strokeStyle = COLORS.cream;
     context.beginPath();
+    const wing = Math.sin(wingPhase) * 18;
     context.moveTo(-8, -8);
-    context.lineTo(-46, -34);
+    context.lineTo(-46, -34 - wing);
     context.moveTo(8, -8);
-    context.lineTo(46, -34);
+    context.lineTo(46, -34 + wing);
     context.moveTo(-8, 8);
-    context.lineTo(-48, 38);
+    context.lineTo(-48, 38 + wing);
     context.moveTo(8, 8);
-    context.lineTo(48, 38);
+    context.lineTo(48, 38 - wing);
     context.stroke();
   } else if (token === 'coffee') {
     context.fillStyle = COLORS.cream;
@@ -354,7 +507,7 @@ function drawTapToken(
     context.closePath();
     context.stroke();
   }
-  context.strokeStyle = token === 'mosquito' ? COLORS.yellow : 'rgba(247,239,220,0.35)';
+  context.strokeStyle = 'rgba(247,239,220,0.35)';
   context.lineWidth = 6;
   context.beginPath();
   context.arc(0, 0, radius, 0, Math.PI * 2);
@@ -362,44 +515,75 @@ function drawTapToken(
   context.restore();
 }
 
-function drawTap(context: CanvasRenderingContext2D, config: TapConfig, state: TapState): void {
+function drawTap(
+  context: CanvasRenderingContext2D,
+  config: TapConfig,
+  state: TapState,
+  reducedMotion: boolean,
+): void {
   fillBackground(context, '#19123e', '#392458');
   const lamp = context.createRadialGradient(760, 170, 20, 760, 170, 330);
   lamp.addColorStop(0, 'rgba(246,223,73,0.65)');
   lamp.addColorStop(1, 'rgba(246,223,73,0)');
+  context.save();
+  context.globalAlpha = reducedMotion ? 1 : 0.82 + Math.sin(state.tick * 0.08) * 0.18;
   context.fillStyle = lamp;
   context.fillRect(400, 0, 600, 650);
+  context.restore();
   context.fillStyle = '#633f35';
   context.fillRect(0, 730, 1_000, 270);
+  context.save();
+  preserveObjectAspect(context, 500, 850);
   context.fillStyle = '#20172a';
   context.fillRect(75, 760, 360, 170);
   context.strokeStyle = COLORS.cyan;
   context.lineWidth = 8;
   context.strokeRect(75, 760, 360, 170);
+  context.fillStyle = 'rgba(86,231,237,0.12)';
+  context.fillRect(98, 785, 314, 118);
+  context.fillStyle = '#8da0bb';
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 8; column += 1) {
+      context.fillRect(102 + column * 37, 812 + row * 27, 24, 11);
+    }
+  }
   context.fillStyle = COLORS.cream;
   context.beginPath();
   context.roundRect(700, 770, 120, 120, 16);
   context.fill();
   context.strokeStyle = COLORS.navy;
   context.stroke();
+  context.fillStyle = '#8f5539';
+  context.beginPath();
+  context.ellipse(760, 796, 41, 18, 0, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = 'rgba(255,245,223,0.5)';
+  context.lineWidth = 6;
+  context.beginPath();
+  context.moveTo(742, 742);
+  context.quadraticCurveTo(716, 704, 748, 675);
+  context.stroke();
+  context.restore();
   if (state.target) {
+    const position = getTapTargetPosition(state.target, state.tick);
     context.strokeStyle = 'rgba(185,160,255,0.35)';
     context.lineWidth = 5;
     context.beginPath();
-    context.moveTo(state.target.x - 80, state.target.y + 30);
-    context.quadraticCurveTo(
-      state.target.x + 20,
-      state.target.y - 90,
-      state.target.x + 70,
-      state.target.y + 12,
-    );
+    context.moveTo(position.x - 80, position.y + 30);
+    context.quadraticCurveTo(position.x + 20, position.y - 90, position.x + 70, position.y + 12);
     context.stroke();
-    drawTapToken(context, state.target.token, state.target.x, state.target.y, state.target.radius);
+    drawTapToken(
+      context,
+      state.target.token,
+      position.x,
+      position.y,
+      state.target.radius,
+      reducedMotion ? 0 : state.tick * 1.3,
+    );
   }
   context.fillStyle = 'rgba(7,23,43,0.82)';
   context.fillRect(25, 22, 420, 82);
   label(context, `HITS ${state.hits}   COMBO ×${state.combo}`, 235, 63, 27);
-  label(context, 'MOSQUITO MEETING', 775, 64, 23, COLORS.violet);
   void config;
 }
 
@@ -416,6 +600,7 @@ function drawClassify(
   context: CanvasRenderingContext2D,
   config: ClassifyConfig,
   state: ClassifyState,
+  reducedMotion: boolean,
 ): void {
   fillBackground(context, '#ff8f78', '#ffc463');
   context.fillStyle = COLORS.cream;
@@ -427,21 +612,44 @@ function drawClassify(
   context.stroke();
   context.fillStyle = COLORS.navy;
   context.fillRect(70, 110, 860, 92);
-  label(context, 'INBOX ZERO HERO', 250, 156, 28);
-  label(context, `${state.correct} KEPT RIGHT  ·  ×${state.combo}`, 720, 156, 23, COLORS.yellow);
+  for (const [x, color] of [
+    [105, COLORS.coral],
+    [141, COLORS.yellow],
+    [177, COLORS.green],
+  ] as const) {
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(x, 156, 11, 0, Math.PI * 2);
+    context.fill();
+  }
+  label(context, `${state.correct} FILED  ·  ×${state.combo}`, 690, 156, 23, COLORS.yellow);
   if (state.currentCardIndex === null) {
     label(context, 'NEXT MESSAGE…', 500, 510, 52, COLORS.navy);
   } else {
     const card = config.cards[state.currentCardIndex];
     if (card) {
+      context.save();
+      const cardAge = state.tick - state.cardStartedAtTick;
+      const enterOffset = reducedMotion ? 0 : Math.max(0, 12 - cardAge) * 34;
+      context.translate(enterOffset, 0);
+      preserveObjectAspect(context, 500, 475);
       const remaining = Math.max(0, state.cardExpiresAtTick - state.tick);
-      const total = config.decisionSeconds * 60;
+      const total = Math.max(1, state.cardExpiresAtTick - state.cardStartedAtTick);
+      context.fillStyle = 'rgba(7,23,43,0.18)';
+      for (let index = 0; index < 3; index += 1) {
+        context.fillRect(155 + index * 14, 250 - index * 12, 690, 380);
+      }
       context.fillStyle = '#e6dcc8';
+      context.shadowColor = 'rgba(7,23,43,0.28)';
+      context.shadowBlur = 26;
+      context.shadowOffsetY = 14;
       context.beginPath();
       context.roundRect(130, 265, 740, 420, 26);
       context.fill();
       context.stroke();
-      context.fillStyle = card.correctChoice === 'keep' ? COLORS.cyan : COLORS.coral;
+      context.shadowColor = 'transparent';
+      context.fillStyle =
+        card.icon === 'prize' || card.icon === 'robot' ? COLORS.violet : COLORS.cyan;
       context.beginPath();
       context.arc(250, 420, 78, 0, Math.PI * 2);
       context.fill();
@@ -467,10 +675,22 @@ function drawClassify(
       context.fillRect(150, 625, 700, 20);
       context.fillStyle = remaining / total > 0.3 ? COLORS.cyan : COLORS.coral;
       context.fillRect(150, 625, 700 * Math.min(1, remaining / total), 20);
+      context.restore();
     }
   }
-  label(context, 'KEEP', 280, 786, 32, '#11645d');
-  label(context, 'TRASH', 720, 786, 32, '#a9352b');
+  if (state.feedbackTicks > 0 && state.currentCardIndex === null) {
+    context.strokeStyle = state.feedback === 'good' ? '#11645d' : '#a9352b';
+    context.lineWidth = 12;
+    context.strokeRect(360, 350, 280, 170);
+    label(
+      context,
+      state.feedback === 'good' ? '✓ FILED' : '× WRONG',
+      500,
+      435,
+      44,
+      context.strokeStyle,
+    );
+  }
 }
 
 function formatTimer(seconds: number): string {
@@ -483,8 +703,12 @@ function drawTiming(
   context: CanvasRenderingContext2D,
   config: TimingConfig,
   state: TimingState,
+  reducedMotion: boolean,
 ): void {
   fillBackground(context, '#111720', '#202936');
+  context.strokeStyle = 'rgba(255,255,255,0.045)';
+  context.lineWidth = 3;
+  for (let x = 0; x < WORLD_WIDTH; x += 125) context.strokeRect(x, 0, 125, 125);
   context.fillStyle = '#313b45';
   context.strokeStyle = '#05090e';
   context.lineWidth = 18;
@@ -492,6 +716,8 @@ function drawTiming(
   context.roundRect(75, 100, 850, 780, 42);
   context.fill();
   context.stroke();
+  context.fillStyle = 'rgba(255,255,255,0.08)';
+  context.fillRect(108, 126, 780, 12);
   context.fillStyle = '#111820';
   context.beginPath();
   context.roundRect(125, 170, 560, 500, 25);
@@ -500,16 +726,22 @@ function drawTiming(
   const glow = context.createRadialGradient(405, 430, 10, 405, 430, 260);
   glow.addColorStop(0, 'rgba(246,223,73,0.45)');
   glow.addColorStop(1, 'rgba(246,223,73,0)');
+  context.save();
+  context.globalAlpha = reducedMotion ? 1 : 0.78 + Math.sin(state.tick * 0.12) * 0.22;
   context.fillStyle = glow;
   context.fillRect(135, 180, 540, 480);
+  context.restore();
   context.save();
   context.translate(405, 465);
-  context.rotate(state.timerSeconds * 0.9);
+  const foodTransform = context.getTransform();
+  context.scale(1, Math.min(1, foodTransform.a / foodTransform.d));
+  context.scale(1, 0.56);
+  context.rotate(reducedMotion ? 0 : state.timerSeconds * 0.9);
   context.fillStyle = '#d9854e';
   context.strokeStyle = COLORS.cream;
   context.lineWidth = 9;
   context.beginPath();
-  context.ellipse(0, 0, 145, 82, 0, 0, Math.PI * 2);
+  context.arc(0, 0, 145, 0, Math.PI * 2);
   context.fill();
   context.stroke();
   for (let slice = 0; slice < 6; slice += 1) {
@@ -519,7 +751,27 @@ function drawTiming(
     context.lineTo(125, 0);
     context.stroke();
   }
+  context.fillStyle = '#b44528';
+  for (const [x, y] of [
+    [-60, -20],
+    [35, -40],
+    [65, 25],
+    [-25, 35],
+  ] as const) {
+    context.beginPath();
+    context.ellipse(x, y, 16, 12, 0, 0, Math.PI * 2);
+    context.fill();
+  }
   context.restore();
+  context.strokeStyle = 'rgba(255,245,223,0.42)';
+  context.lineWidth = 8;
+  context.beginPath();
+  const steamSway = reducedMotion ? 0 : Math.sin(state.tick * 0.13) * 22;
+  context.moveTo(365, 325);
+  context.quadraticCurveTo(325 + steamSway, 275, 365, 225);
+  context.moveTo(445, 325);
+  context.quadraticCurveTo(485 - steamSway, 275, 445, 225);
+  context.stroke();
   context.fillStyle = '#07120c';
   context.beginPath();
   context.roundRect(720, 185, 155, 150, 14);
@@ -555,9 +807,14 @@ function drawSequence(
   context: CanvasRenderingContext2D,
   config: SequenceConfig,
   state: SequenceState,
+  reducedMotion: boolean,
 ): void {
   fillBackground(context, '#0b3344', '#07172b');
-  context.fillStyle = '#bdc6c7';
+  const brass = context.createLinearGradient(60, 90, 680, 910);
+  brass.addColorStop(0, '#f1df9c');
+  brass.addColorStop(0.5, '#9c783b');
+  brass.addColorStop(1, '#ddc171');
+  context.fillStyle = brass;
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 14;
   context.fillRect(60, 90, 620, 820);
@@ -576,6 +833,19 @@ function drawSequence(
     context.moveTo(130, y);
     context.lineTo(610, y);
     context.stroke();
+  }
+  const doorSheen = context.createLinearGradient(135, 0, 580, 0);
+  doorSheen.addColorStop(0, 'rgba(255,255,255,0)');
+  doorSheen.addColorStop(0.5, 'rgba(255,255,255,0.16)');
+  doorSheen.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = doorSheen;
+  context.fillRect(130, 165, 475, 665);
+  for (let index = 0; index < 8; index += 1) {
+    const lit = reducedMotion ? index === 0 : (index + Math.floor(state.tick / 5)) % 8 === 0;
+    context.fillStyle = lit ? COLORS.yellow : 'rgba(247,239,220,0.18)';
+    context.beginPath();
+    context.arc(85, 190 + index * 82, lit ? 9 : 5, 0, Math.PI * 2);
+    context.fill();
   }
   context.fillStyle = '#091015';
   context.beginPath();
@@ -601,7 +871,14 @@ function drawSequence(
       index === 0 ? COLORS.navy : COLORS.cream,
     );
   });
-  label(context, required ? `HIT FLOOR ${required}` : 'FINALE!', 830, 730, 30, COLORS.yellow);
+  label(
+    context,
+    required === undefined ? 'FINALE!' : `TARGET ${required}`,
+    830,
+    730,
+    28,
+    COLORS.yellow,
+  );
   label(context, `CHIMES ${state.hits}  ·  ×${state.combo}`, 830, 805, 24);
   if (state.feedback === 'good' && state.feedbackTicks > 0) {
     label(context, '♪', 110, 90 + state.feedbackTicks * 8, 60, COLORS.yellow);
@@ -615,6 +892,8 @@ function drawGarment(
   token: SortToken,
   x: number,
   y: number,
+  tick: number,
+  reducedMotion: boolean,
 ): void {
   const dark = token === 'navy-sock' || token === 'red-shirt' || token === 'black-towel';
   const color = token.startsWith('white')
@@ -626,7 +905,9 @@ function drawGarment(
         : '#142d52';
   context.save();
   context.translate(x, y);
-  context.rotate(Math.sin(y * 0.018) * 0.09);
+  const transform = context.getTransform();
+  context.scale(1, Math.min(1, Math.abs(transform.a / transform.d)));
+  context.rotate(reducedMotion ? 0 : Math.sin(tick * 0.11 + y * 0.018) * 0.13);
   context.fillStyle = color;
   context.strokeStyle = dark ? COLORS.cream : COLORS.navy;
   context.lineWidth = 10;
@@ -658,10 +939,23 @@ function drawGarment(
   }
   context.fill();
   context.stroke();
+  context.strokeStyle = 'rgba(255,255,255,0.38)';
+  context.lineWidth = 3;
+  for (let seam = -1; seam <= 1; seam += 1) {
+    context.beginPath();
+    context.moveTo(-35 + seam * 14, -45);
+    context.quadraticCurveTo(10 + seam * 14, 0, -10 + seam * 14, 65);
+    context.stroke();
+  }
   context.restore();
 }
 
-function drawSort(context: CanvasRenderingContext2D, config: SortConfig, state: SortState): void {
+function drawSort(
+  context: CanvasRenderingContext2D,
+  config: SortConfig,
+  state: SortState,
+  reducedMotion: boolean,
+): void {
   fillBackground(context, '#dff3e4', '#7de3a1');
   context.fillStyle = '#d6f0f1';
   context.fillRect(0, 0, 1_000, 760);
@@ -670,6 +964,26 @@ function drawSort(context: CanvasRenderingContext2D, config: SortConfig, state: 
   for (let x = 0; x < 1_000; x += 125) {
     context.strokeRect(x, 0, 125, 125);
   }
+  context.fillStyle = '#86a896';
+  context.fillRect(350, 135, 560, 18);
+  for (const [x, color, height] of [
+    [420, COLORS.cyan, 92],
+    [560, COLORS.coral, 120],
+    [710, COLORS.yellow, 82],
+  ] as const) {
+    context.save();
+    preserveObjectAspect(context, x + 35, 135);
+    context.fillStyle = color;
+    context.strokeStyle = COLORS.navy;
+    context.lineWidth = 8;
+    context.beginPath();
+    context.roundRect(x, 135 - height, 70, height, 12);
+    context.fill();
+    context.stroke();
+    context.restore();
+  }
+  context.save();
+  preserveObjectAspect(context, 170, 275);
   context.fillStyle = COLORS.cream;
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 13;
@@ -684,7 +998,23 @@ function drawSort(context: CanvasRenderingContext2D, config: SortConfig, state: 
   context.beginPath();
   context.arc(170, 290, 68, 0, Math.PI * 2);
   context.fill();
+  context.save();
+  context.translate(170, 290);
+  context.rotate(reducedMotion ? 0 : state.tick * 0.05);
+  context.strokeStyle = 'rgba(247,239,220,0.72)';
+  context.lineWidth = 9;
+  for (let arm = 0; arm < 3; arm += 1) {
+    context.rotate((Math.PI * 2) / 3);
+    context.beginPath();
+    context.moveTo(0, 0);
+    context.lineTo(45, 0);
+    context.stroke();
+  }
+  context.restore();
+  context.restore();
   context.fillStyle = '#f0eadc';
+  context.strokeStyle = COLORS.navy;
+  context.lineWidth = 13;
   context.beginPath();
   context.moveTo(55, 1_000);
   context.lineTo(55, 760);
@@ -702,11 +1032,29 @@ function drawSort(context: CanvasRenderingContext2D, config: SortConfig, state: 
   context.closePath();
   context.fill();
   context.stroke();
-  label(context, config.leftLabel.toUpperCase(), 260, 865, 43, COLORS.navy);
-  label(context, config.rightLabel.toUpperCase(), 740, 865, 43, COLORS.cream);
+  context.save();
+  context.strokeStyle = 'rgba(145,130,100,0.55)';
+  context.lineWidth = 8;
+  for (let row = 0; row < 4; row += 1) {
+    context.beginPath();
+    context.moveTo(75, 790 + row * 48);
+    context.lineTo(430, 725 + row * 60);
+    context.moveTo(570, 725 + row * 60);
+    context.lineTo(925, 790 + row * 48);
+    context.stroke();
+  }
+  context.restore();
   if (state.currentItemIndex !== null) {
     const item = config.items[state.currentItemIndex];
-    if (item) drawGarment(context, item.token, 500, 210 + state.itemProgress * 470);
+    if (item)
+      drawGarment(
+        context,
+        item.token,
+        500,
+        210 + state.itemProgress * 470,
+        state.tick,
+        reducedMotion,
+      );
   }
   context.fillStyle = COLORS.navy;
   context.fillRect(350, 25, 300, 74);
@@ -728,27 +1076,28 @@ export function renderGameScene(
   config: DailyGameConfig,
   state: DailyGameState,
   reducedMotion: boolean,
-): RendererId {
+): void {
   context.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   context.save();
   if (!reducedMotion && state.feedback === 'bad' && state.feedbackTicks > 12) {
     context.translate(state.feedbackTicks % 2 === 0 ? 9 : -9, 0);
   }
   if (config.engine === 'defense-v1' && state.engine === 'defense-v1')
-    drawDefense(context, config, state);
+    drawDefense(context, config, state, reducedMotion);
   else if (config.engine === 'dodge-v1' && state.engine === 'dodge-v1')
-    drawDodge(context, config, state);
-  else if (config.engine === 'tap-v1' && state.engine === 'tap-v1') drawTap(context, config, state);
+    drawDodge(context, config, state, reducedMotion);
+  else if (config.engine === 'tap-v1' && state.engine === 'tap-v1')
+    drawTap(context, config, state, reducedMotion);
   else if (config.engine === 'classify-v1' && state.engine === 'classify-v1')
-    drawClassify(context, config, state);
+    drawClassify(context, config, state, reducedMotion);
   else if (config.engine === 'timing-v1' && state.engine === 'timing-v1')
-    drawTiming(context, config, state);
+    drawTiming(context, config, state, reducedMotion);
   else if (config.engine === 'sequence-v1' && state.engine === 'sequence-v1')
-    drawSequence(context, config, state);
+    drawSequence(context, config, state, reducedMotion);
   else if (config.engine === 'sort-v1' && state.engine === 'sort-v1')
-    drawSort(context, config, state);
+    drawSort(context, config, state, reducedMotion);
   else throw new Error('Renderer received mismatched engine data.');
   context.restore();
+  finishScene(context, COLORS[config.palette]);
   feedbackEffects(context, state, reducedMotion);
-  return rendererIdFor(config);
 }

@@ -258,7 +258,12 @@ function validateClassify(value: Record<string, unknown>): void {
     if (
       !isRecord(card) ||
       Object.keys(card).some(
-        (key) => key !== 'sender' && key !== 'subject' && key !== 'icon' && key !== 'correctChoice',
+        (key) =>
+          key !== 'sender' &&
+          key !== 'subject' &&
+          key !== 'icon' &&
+          key !== 'correctChoice' &&
+          key !== 'difficulty',
       )
     ) {
       throw new InvalidGameConfigError('message card fields are not allowlisted.');
@@ -270,6 +275,9 @@ function validateClassify(value: Record<string, unknown>): void {
     }
     if (!MESSAGE_CHOICES.has(card.correctChoice as MessageChoice)) {
       throw new InvalidGameConfigError('message choice is not allowlisted.');
+    }
+    if (!['easy', 'medium', 'tricky'].includes(card.difficulty as string)) {
+      throw new InvalidGameConfigError('message difficulty is not allowlisted.');
     }
   }
   requireNumber(value.decisionSeconds, 'decisionSeconds', 1.5, 5);

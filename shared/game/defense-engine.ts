@@ -1,4 +1,5 @@
 import { FIXED_TIMESTEP_SECONDS } from './engine';
+import { gameDifficulty } from './difficulty';
 import { nextSeededRandom } from './rng';
 import type { DefenseConfig, DefenseState, DefenseThreat } from './types';
 
@@ -29,23 +30,28 @@ function spawnThreat(state: DefenseState, config: DefenseConfig): DefenseState {
   const speedRandom = nextSeededRandom(angleRandom.state);
   const variantRandom = nextSeededRandom(speedRandom.state);
   const delayRandom = nextSeededRandom(variantRandom.state);
+  const difficulty = gameDifficulty(state.elapsedSeconds, config.durationSeconds);
+  const speedRange = config.approachSecondsMax - config.approachSecondsMin;
   const approachSeconds =
-    config.approachSecondsMin +
-    speedRandom.value * (config.approachSecondsMax - config.approachSecondsMin);
+    config.approachSecondsMax -
+    speedRandom.value * speedRange * (0.25 + difficulty.intensity * 0.75);
   const variants = ['glide', 'dart', 'wobble'] as const;
+  const availableVariants = difficulty.phase === 'learn' ? 1 : difficulty.phase === 'focus' ? 2 : 3;
   const threat: DefenseThreat = {
     id: state.nextThreatId,
-    angle: angleRandom.value * Math.PI * 2,
+    angle: state.nextThreatId === 1 ? -Math.PI / 2 : angleRandom.value * Math.PI * 2,
     distance: START_DISTANCE,
     approachRate: (START_DISTANCE - SAMOSA_DISTANCE) / approachSeconds,
-    variant: variants[Math.min(2, Math.floor(variantRandom.value * variants.length))] ?? 'glide',
-    radius: variantRandom.value < 0.32 ? 40 : 48,
+    variant:
+      variants[
+        Math.min(availableVariants - 1, Math.floor(variantRandom.value * availableVariants))
+      ] ?? 'glide',
+    radius: difficulty.phase === 'finale' && variantRandom.value < 0.28 ? 42 : 50,
   };
-  const progress = Math.min(1, state.elapsedSeconds / config.durationSeconds);
   const interval =
     config.spawnIntervalMax +
-    (config.spawnIntervalMin - config.spawnIntervalMax) * progress +
-    delayRandom.value * 0.18;
+    (config.spawnIntervalMin - config.spawnIntervalMax) * difficulty.intensity +
+    delayRandom.value * 0.12;
   return {
     ...state,
     randomState: delayRandom.state,
@@ -73,7 +79,7 @@ export function createDefenseState(config: DefenseConfig): DefenseState {
     escaped: 0,
     threats: [],
     nextThreatId: 1,
-    nextSpawnTick: 1,
+    nextSpawnTick: Math.round(0.65 / FIXED_TIMESTEP_SECONDS),
   };
 }
 
@@ -90,6 +96,7 @@ export function stepDefenseGame(
   let health = previous.health;
   let feedback = previous.feedbackTicks > 1 ? previous.feedback : null;
   let feedbackTicks = Math.max(0, previous.feedbackTicks - 1);
+  let nextSpawnTick = previous.nextSpawnTick;
   let tappedId: number | null = null;
 
   if (tap) {
@@ -105,6 +112,7 @@ export function stepDefenseGame(
     if (tappedId !== null) {
       shooed += 1;
       feedback = 'good';
+      nextSpawnTick = Math.max(nextSpawnTick, tick + Math.round(0.24 / FIXED_TIMESTEP_SECONDS));
     } else {
       feedback = 'bad';
     }
@@ -140,10 +148,21 @@ export function stepDefenseGame(
     shooed,
     escaped,
     threats,
+    nextSpawnTick,
     phase: elapsedSeconds >= config.durationSeconds || health <= 0 ? 'game-over' : 'active',
     endedReason:
       health <= 0 ? 'collision' : elapsedSeconds >= config.durationSeconds ? 'complete' : null,
   };
-  if (state.phase === 'active' && tick >= state.nextSpawnTick) state = spawnThreat(state, config);
+  if (state.phase === 'active' && tick >= state.nextSpawnTick) {
+    const difficulty = gameDifficulty(state.elapsedSeconds, config.durationSeconds);
+    const maximumThreats = difficulty.phase === 'learn' ? 1 : difficulty.phase === 'focus' ? 2 : 3;
+    state =
+      state.threats.length < maximumThreats
+        ? spawnThreat(state, config)
+        : {
+            ...state,
+            nextSpawnTick: tick + Math.round(0.18 / FIXED_TIMESTEP_SECONDS),
+          };
+  }
   return state;
 }

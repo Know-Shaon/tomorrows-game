@@ -28,6 +28,9 @@ export function App() {
     loadPrototypeState(window.localStorage),
   );
   const reducedMotion = useReducedMotion();
+  const [hasPlayedToday, setHasPlayedToday] = useState(
+    () => prototype.stats.lastPlayedDate === localDateKey(new Date()),
+  );
   const daily = useMemo(() => getDailyInfo(now), [now]);
   const [config, setConfig] = useState<DailyGameConfig>(() =>
     getDailyConfig(getDailyInfo(new Date()).challengeNumber - 1),
@@ -53,6 +56,7 @@ export function App() {
 
   const finishGame = useCallback(
     (score: number) => {
+      setHasPlayedToday(true);
       updatePrototype((current) => {
         const currentDate = new Date();
         const today = localDateKey(currentDate);
@@ -83,6 +87,13 @@ export function App() {
           config={config}
           bestScore={prototype.bestScores[config.id] ?? 0}
           reducedMotion={reducedMotion}
+          soundEnabled={prototype.preferences.soundEnabled}
+          onSoundEnabledChange={(soundEnabled) =>
+            updatePrototype((current) => ({
+              ...current,
+              preferences: { ...current.preferences, soundEnabled },
+            }))
+          }
           onFinish={finishGame}
           nextGameCountdown={formatCountdown(daily.millisecondsRemaining)}
           onExit={(target) => {
@@ -99,6 +110,7 @@ export function App() {
   return (
     <div data-reduced-motion={reducedMotion ? 'true' : 'false'}>
       <TodayPage
+        hasPlayedToday={hasPlayedToday}
         config={config}
         challengeNumber={daily.challengeNumber}
         countdown={formatCountdown(daily.millisecondsRemaining)}

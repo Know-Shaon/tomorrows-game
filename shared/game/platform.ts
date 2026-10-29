@@ -58,7 +58,7 @@ export function stepDailyGame(
     case 'timing-v1':
       if (state.engine !== 'timing-v1' || input.engine !== 'timing-v1')
         throw new Error('Invalid timing dispatch.');
-      return stepTimingGame(state, input.stop, config);
+      return stepTimingGame(state, input.stopAtSeconds, config);
     case 'sequence-v1':
       if (state.engine !== 'sequence-v1' || input.engine !== 'sequence-v1')
         throw new Error('Invalid sequence dispatch.');

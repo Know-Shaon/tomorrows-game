@@ -3,16 +3,18 @@ import type { TimingConfig, TimingRating, TimingState } from './types';
 
 export function timingRating(offsetMilliseconds: number): TimingRating {
   const absolute = Math.abs(offsetMilliseconds);
-  if (absolute <= 50) return 'perfect';
+  if (absolute <= 25) return 'perfect';
+  if (absolute <= 75) return 'excellent';
   if (absolute <= 150) return 'great';
-  if (absolute <= 350) return 'ok';
+  if (absolute <= 300) return 'good';
   return 'miss';
 }
 
 function ratingPoints(rating: TimingRating): number {
-  if (rating === 'perfect') return 1_000;
-  if (rating === 'great') return 750;
-  if (rating === 'ok') return 400;
+  if (rating === 'perfect') return 1_200;
+  if (rating === 'excellent') return 950;
+  if (rating === 'great') return 700;
+  if (rating === 'good') return 400;
   return 0;
 }
 
@@ -34,13 +36,14 @@ export function createTimingState(config: TimingConfig): TimingState {
     targetSeconds: config.targetsSeconds[0] ?? 7,
     lastOffsetMilliseconds: null,
     lastRating: null,
+    roundResults: [],
     waitingTicks: 0,
   };
 }
 
 export function stepTimingGame(
   previous: TimingState,
-  stop: boolean,
+  stopAtSeconds: number | null,
   config: TimingConfig,
 ): TimingState {
   if (previous.phase !== 'active') return previous;
@@ -53,15 +56,23 @@ export function stepTimingGame(
   let score = previous.score;
   let lastOffsetMilliseconds = previous.lastOffsetMilliseconds;
   let lastRating = previous.lastRating;
+  let roundResults = previous.roundResults;
   let feedback = previous.feedbackTicks > 1 ? previous.feedback : null;
   let feedbackTicks = Math.max(0, previous.feedbackTicks - 1);
 
   if (previous.waitingTicks === 0) timerSeconds += FIXED_TIMESTEP_SECONDS;
+  if (stopAtSeconds !== null && previous.waitingTicks === 0) {
+    timerSeconds = Math.max(previous.timerSeconds, stopAtSeconds);
+  }
   const timedOut = timerSeconds >= targetSeconds + config.roundGraceSeconds;
-  if ((stop || timedOut) && previous.waitingTicks === 0) {
+  if ((stopAtSeconds !== null || timedOut) && previous.waitingTicks === 0) {
     lastOffsetMilliseconds = Math.round((timerSeconds - targetSeconds) * 1_000);
     lastRating = timingRating(lastOffsetMilliseconds);
     score += ratingPoints(lastRating);
+    roundResults = [
+      ...roundResults,
+      { offsetMilliseconds: lastOffsetMilliseconds, rating: lastRating },
+    ];
     feedback = lastRating === 'miss' ? 'bad' : 'good';
     feedbackTicks = 28;
     round += 1;
@@ -88,6 +99,7 @@ export function stepTimingGame(
     targetSeconds,
     lastOffsetMilliseconds,
     lastRating,
+    roundResults,
     waitingTicks,
   };
 }

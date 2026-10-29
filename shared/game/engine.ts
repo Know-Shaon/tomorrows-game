@@ -1,4 +1,5 @@
 import { nextSeededRandom } from './rng';
+import { difficultyFromProgress } from './difficulty';
 import type { DodgeConfig, DodgeState, GameInput, LaneIndex, LaneWave } from './types';
 
 export const FIXED_TIMESTEP_SECONDS = 1 / 60;
@@ -32,17 +33,19 @@ export function generateLaneWave(
   waveIndex: number,
   config: DodgeConfig,
 ): GeneratedLaneWave {
-  const difficulty = Math.min(1, waveIndex / 24);
-  const previousDifficulty = Math.min(1, Math.max(0, waveIndex - 1) / 24);
+  const difficulty = difficultyFromProgress(waveIndex / 26);
+  const previousDifficulty = difficultyFromProgress(Math.max(0, waveIndex - 1) / 26);
   const interval =
-    config.waveIntervalStart + (config.waveIntervalEnd - config.waveIntervalStart) * difficulty;
+    config.waveIntervalStart +
+    (config.waveIntervalEnd - config.waveIntervalStart) * difficulty.intensity;
   const previousInterval =
     config.waveIntervalStart +
-    (config.waveIntervalEnd - config.waveIntervalStart) * previousDifficulty;
+    (config.waveIntervalEnd - config.waveIntervalStart) * previousDifficulty.intensity;
   const travelSeconds =
-    config.waveTravelStart + (config.waveTravelEnd - config.waveTravelStart) * difficulty;
+    config.waveTravelStart + (config.waveTravelEnd - config.waveTravelStart) * difficulty.intensity;
   const previousTravelSeconds =
-    config.waveTravelStart + (config.waveTravelEnd - config.waveTravelStart) * previousDifficulty;
+    config.waveTravelStart +
+    (config.waveTravelEnd - config.waveTravelStart) * previousDifficulty.intensity;
   const decisionSeconds =
     waveIndex === 0
       ? travelSeconds * 0.9
@@ -57,7 +60,8 @@ export function generateLaneWave(
   }
 
   const densityRandom = nextSeededRandom(safeRandom.state);
-  const secondHazard = densityRandom.value < 0.42 + difficulty * 0.42;
+  const secondHazard =
+    difficulty.phase !== 'learn' && densityRandom.value < 0.35 + difficulty.intensity * 0.5;
   const hazards: [boolean, boolean, boolean] = [false, false, false];
   const blocked = ([0, 1, 2] as const).filter((candidate) => candidate !== safeLane);
   const firstIndex = densityRandom.value < 0.5 ? 0 : 1;
@@ -69,13 +73,19 @@ export function generateLaneWave(
   }
 
   const bonusRandom = nextSeededRandom(densityRandom.state);
+  const bonusChoiceRandom = nextSeededRandom(bonusRandom.state);
+  const openLanes = ([0, 1, 2] as const).filter((candidate) => !hazards[candidate]);
+  const bonusLane =
+    bonusRandom.value < 0.38
+      ? (openLanes[Math.floor(bonusChoiceRandom.value * openLanes.length)] ?? null)
+      : null;
   return {
-    randomState: bonusRandom.state,
+    randomState: bonusChoiceRandom.state,
     wave: {
       id: waveIndex + 1,
       safeLane,
       hazards,
-      bonusLane: bonusRandom.value < 0.34 ? safeLane : null,
+      bonusLane,
       progress: 0,
       travelSeconds,
       resolved: false,

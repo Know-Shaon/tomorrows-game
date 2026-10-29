@@ -106,6 +106,9 @@ export interface TapTarget {
   x: number;
   y: number;
   radius: number;
+  motion: 'hover' | 'zigzag' | 'orbit';
+  motionAmplitude: number;
+  motionRate: number;
   spawnedAtTick: number;
   expiresAtTick: number;
 }
@@ -118,6 +121,7 @@ export interface MessageDefinition {
   subject: string;
   icon: MessageIcon;
   correctChoice: MessageChoice;
+  difficulty: 'easy' | 'medium' | 'tricky';
 }
 
 export interface ClassifyConfig extends BaseDailyGameConfig {
@@ -135,7 +139,12 @@ export interface TimingConfig extends BaseDailyGameConfig {
   roundGraceSeconds: number;
 }
 
-export type TimingRating = 'perfect' | 'great' | 'ok' | 'miss';
+export type TimingRating = 'perfect' | 'excellent' | 'great' | 'good' | 'miss';
+
+export interface TimingRoundResult {
+  offsetMilliseconds: number;
+  rating: TimingRating;
+}
 
 export interface SequenceConfig extends BaseDailyGameConfig {
   engine: 'sequence-v1';
@@ -239,6 +248,7 @@ export interface ClassifyState extends BaseSimulationState {
   currentCardIndex: number | null;
   cardNumber: number;
   cardExpiresAtTick: number;
+  cardStartedAtTick: number;
   nextCardTick: number;
   correct: number;
   mistakes: number;
@@ -254,6 +264,7 @@ export interface TimingState extends BaseSimulationState {
   targetSeconds: number;
   lastOffsetMilliseconds: number | null;
   lastRating: TimingRating | null;
+  roundResults: readonly TimingRoundResult[];
   waitingTicks: number;
 }
 
@@ -289,6 +300,6 @@ export type DailyGameInput =
   | { engine: 'dodge-v1'; laneChange: -1 | 0 | 1; directLane: LaneIndex | null }
   | { engine: 'tap-v1'; tap: { x: number; y: number } | null }
   | { engine: 'classify-v1'; choice: MessageChoice | null }
-  | { engine: 'timing-v1'; stop: boolean }
+  | { engine: 'timing-v1'; stopAtSeconds: number | null }
   | { engine: 'sequence-v1'; hit: boolean }
   | { engine: 'sort-v1'; choice: SortSide | null };

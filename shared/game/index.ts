@@ -1,5 +1,7 @@
 export { validateGameConfig, InvalidGameConfigError } from './config';
 export { DAILY_CONFIGS, getDailyConfig } from './configs';
+export { difficultyFromProgress, gameDifficulty } from './difficulty';
+export type { DifficultyPhase, DifficultySnapshot } from './difficulty';
 export { createClassifyState, stepClassifyGame } from './classify-engine';
 export { createDefenseState, getDefenseThreatPosition, stepDefenseGame } from './defense-engine';
 export {
@@ -17,7 +19,7 @@ export { createSequenceState, stepSequenceGame } from './sequence-engine';
 export { createDailyGameState, runDailyGameSteps, stepDailyGame } from './platform';
 export { createSortState, stepSortGame } from './sort-engine';
 export { canTransition, transitionGamePhase } from './state-machine';
-export { createTapState, stepTapGame } from './tap-engine';
+export { createTapState, getTapTargetPosition, stepTapGame } from './tap-engine';
 export { createTimingState, stepTimingGame, timingRating } from './timing-engine';
 export type {
   DailyGameConfig,
@@ -55,5 +57,6 @@ export type {
   TapToken,
   TimingConfig,
   TimingRating,
+  TimingRoundResult,
   TimingState,
 } from './types';

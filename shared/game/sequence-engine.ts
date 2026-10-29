@@ -1,4 +1,5 @@
 import { FIXED_TIMESTEP_SECONDS } from './engine';
+import { difficultyFromProgress } from './difficulty';
 import { nextSeededRandom } from './rng';
 import type { SequenceConfig, SequenceState } from './types';
 
@@ -7,11 +8,16 @@ function createRequests(config: SequenceConfig): { randomState: number; requests
   let randomState = config.seed;
   let previous = config.minFloor;
   for (let index = 0; index < config.sequenceLength; index += 1) {
-    const random = nextSeededRandom(randomState);
-    randomState = random.state;
-    const span = config.maxFloor - config.minFloor + 1;
-    let floor = config.minFloor + Math.min(span - 1, Math.floor(random.value * span));
-    if (floor === previous) floor = floor === config.maxFloor ? floor - 1 : floor + 1;
+    const distanceRandom = nextSeededRandom(randomState);
+    const directionRandom = nextSeededRandom(distanceRandom.state);
+    randomState = directionRandom.state;
+    const distance = 2 + Math.floor(distanceRandom.value * 3);
+    const requestedDirection = directionRandom.value < 0.5 ? -1 : 1;
+    let floor = previous + requestedDirection * distance;
+    if (floor < config.minFloor || floor > config.maxFloor) {
+      floor = previous - requestedDirection * distance;
+    }
+    floor = Math.max(config.minFloor, Math.min(config.maxFloor, floor));
     requests.push(floor);
     previous = floor;
   }
@@ -52,16 +58,19 @@ export function stepSequenceGame(
   if (previous.phase !== 'active') return previous;
   const tick = previous.tick + 1;
   const elapsedSeconds = tick * FIXED_TIMESTEP_SECONDS;
-  const speed = config.travelFloorsPerSecond + previous.requestIndex * config.speedRamp;
-  let currentFloor = previous.currentFloor + previous.direction * speed * FIXED_TIMESTEP_SECONDS;
-  let direction = previous.direction;
-  if (currentFloor >= config.maxFloor) {
-    currentFloor = config.maxFloor - (currentFloor - config.maxFloor);
-    direction = -1;
-  } else if (currentFloor <= config.minFloor) {
-    currentFloor = config.minFloor + (config.minFloor - currentFloor);
-    direction = 1;
-  }
+  const difficulty = difficultyFromProgress(
+    previous.requestIndex / Math.max(1, previous.requests.length - 1),
+  );
+  const requestedFloor = previous.requests[previous.requestIndex];
+  const direction: -1 | 1 =
+    requestedFloor === undefined
+      ? previous.direction
+      : requestedFloor >= previous.currentFloor
+        ? 1
+        : -1;
+  const speed = config.travelFloorsPerSecond + difficulty.intensity * config.speedRamp * 3;
+  const currentFloor = previous.currentFloor + direction * speed * FIXED_TIMESTEP_SECONDS;
+  const hitWindow = config.hitWindowFloors * (1.25 - difficulty.intensity * 0.35);
 
   let requestIndex = previous.requestIndex;
   let hits = previous.hits;
@@ -74,16 +83,15 @@ export function stepSequenceGame(
   let feedbackTicks = Math.max(0, previous.feedbackTicks - 1);
 
   if (hit && requestIndex < previous.requests.length) {
-    const requestedFloor = previous.requests[requestIndex];
     if (requestedFloor === undefined) throw new Error('Missing generated elevator request.');
     const difference = Math.abs(currentFloor - requestedFloor);
-    const accurate = difference <= config.hitWindowFloors;
+    const accurate = difference <= hitWindow;
     lastFloorDifference = difference;
     if (accurate) {
       hits += 1;
       combo += 1;
       bestCombo = Math.max(bestCombo, combo);
-      const precision = 1 - difference / config.hitWindowFloors;
+      const precision = 1 - difference / hitWindow;
       score += Math.round(config.pointsPerHit * (0.7 + precision * 0.3));
       feedback = 'good';
     } else {
@@ -91,6 +99,18 @@ export function stepSequenceGame(
       combo = 0;
       feedback = 'bad';
     }
+    feedbackTicks = 22;
+    if (accurate) requestIndex += 1;
+  } else if (
+    requestedFloor !== undefined &&
+    (direction === 1
+      ? currentFloor > requestedFloor + hitWindow
+      : currentFloor < requestedFloor - hitWindow)
+  ) {
+    misses += 1;
+    combo = 0;
+    lastFloorDifference = Math.abs(currentFloor - requestedFloor);
+    feedback = 'bad';
     feedbackTicks = 22;
     requestIndex += 1;
   }

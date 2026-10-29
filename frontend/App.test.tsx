@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { DAILY_CONFIGS } from '@shared/game';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import { getDailyInfo } from './lib/date';
 import { STORAGE_KEY } from './lib/storage';
 
 async function openDefenseInstructions() {
@@ -18,7 +19,7 @@ async function openDefenseInstructions() {
 
 async function startActiveDefenseGame() {
   await openDefenseInstructions();
-  fireEvent.click(screen.getByRole('button', { name: /^play/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'SHOO' }));
   for (let step = 0; step < 4; step += 1) {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
@@ -45,7 +46,7 @@ describe('Tomorrow’s Game interface', () => {
     await startActiveDefenseGame();
 
     expect(screen.getByRole('img', { name: /game field/i })).toBeInTheDocument();
-    expect(screen.getByText(/Tap pigeons on the rooftop/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tap a pigeon/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Move left' })).not.toBeInTheDocument();
   });
 
@@ -58,9 +59,13 @@ describe('Tomorrow’s Game interface', () => {
 
     expect(screen.getByRole('heading', { name: /pigeons shooed/i })).toBeInTheDocument();
     expect(screen.getByText('SCORE')).toBeInTheDocument();
-    expect(screen.getByText(/no public friend link yet/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /play again/i }));
-    expect(screen.getByText('READY')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^retry/i }));
+    expect(screen.getByText('SHOO')).toBeInTheDocument();
+    expect(screen.queryByText('Tap pigeons before they reach the samosa.')).not.toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(160);
+    });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
   });
 
   it('supports keyboard pause and resume', async () => {
@@ -90,6 +95,21 @@ describe('Tomorrow’s Game interface', () => {
     expect(container.firstElementChild).toHaveAttribute('data-reduced-motion', 'true');
   });
 
+  it('persists an explicit sound preference while keeping sound off by default', async () => {
+    await openDefenseInstructions();
+    const sound = screen.getByRole('button', { name: 'Turn on game sounds' });
+    expect(sound).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(sound);
+    expect(screen.getByRole('button', { name: 'Mute game sounds' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      preferences?: { soundEnabled?: boolean };
+    };
+    expect(stored.preferences?.soundEnabled).toBe(true);
+  });
+
   it('switches through every development config and all seven engines', () => {
     render(<App />);
     const selector = screen.getByLabelText('Dev game launcher');
@@ -113,16 +133,22 @@ describe('Tomorrow’s Game interface', () => {
     );
   });
 
-  it('stores a disclosed local vote and suggestion', () => {
-    render(<App />);
+  it('reveals local community only after a run, then stores a vote and suggestion', async () => {
+    await startActiveDefenseGame();
+    expect(screen.queryByRole('heading', { name: 'Pick tomorrow.' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish demo run' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to today' }));
     fireEvent.click(screen.getByLabelText(/One-Minute Museum/i));
-    fireEvent.click(screen.getByRole('button', { name: /lock my local vote/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^vote/i }));
     expect(screen.getByText('Vote saved on this device.')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('One-sentence game idea'), {
       target: { value: 'Catch runaway teacups before breakfast.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /keep idea locally/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save idea/i }));
     expect(screen.getByText(/kept on this device/i)).toBeInTheDocument();
 
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}') as {
@@ -134,11 +160,14 @@ describe('Tomorrow’s Game interface', () => {
   });
 
   it('restores local best score and streak in the personal ribbon', () => {
+    const currentGame =
+      DAILY_CONFIGS[(getDailyInfo(new Date()).challengeNumber - 1) % DAILY_CONFIGS.length];
+    if (!currentGame) throw new Error('Missing current game configuration.');
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
         version: 1,
-        bestScores: { 'mosquito-meeting': 730 },
+        bestScores: { [currentGame.id]: 730 },
         preferences: { soundEnabled: false },
         votes: {},
         suggestions: [],

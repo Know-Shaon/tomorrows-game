@@ -1,18 +1,27 @@
 import { FIXED_TIMESTEP_SECONDS } from './engine';
+import { gameDifficulty } from './difficulty';
 import { nextSeededRandom } from './rng';
 import type { ClassifyConfig, ClassifyState, MessageChoice } from './types';
 
 function spawnCard(state: ClassifyState, config: ClassifyConfig): ClassifyState {
   const random = nextSeededRandom(state.randomState);
+  const difficulty = gameDifficulty(state.elapsedSeconds, config.durationSeconds);
+  const cards = config.cards
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => {
+      if (difficulty.phase === 'learn') return card.difficulty === 'easy';
+      if (difficulty.phase === 'focus') return card.difficulty !== 'tricky';
+      return true;
+    });
+  const selected = cards[Math.min(cards.length - 1, Math.floor(random.value * cards.length))];
+  const decisionSeconds = config.decisionSeconds + 0.85 - difficulty.intensity * 1.55;
   return {
     ...state,
     randomState: random.state,
-    currentCardIndex: Math.min(
-      config.cards.length - 1,
-      Math.floor(random.value * config.cards.length),
-    ),
+    currentCardIndex: selected?.index ?? 0,
     cardNumber: state.cardNumber + 1,
-    cardExpiresAtTick: state.tick + Math.round(config.decisionSeconds / FIXED_TIMESTEP_SECONDS),
+    cardStartedAtTick: state.tick,
+    cardExpiresAtTick: state.tick + Math.round(decisionSeconds / FIXED_TIMESTEP_SECONDS),
   };
 }
 
@@ -32,6 +41,7 @@ export function createClassifyState(config: ClassifyConfig): ClassifyState {
     currentCardIndex: null,
     cardNumber: 0,
     cardExpiresAtTick: 0,
+    cardStartedAtTick: 0,
     nextCardTick: 1,
     correct: 0,
     mistakes: 0,

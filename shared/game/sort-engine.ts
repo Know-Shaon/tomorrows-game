@@ -1,4 +1,5 @@
 import { FIXED_TIMESTEP_SECONDS } from './engine';
+import { gameDifficulty } from './difficulty';
 import { nextSeededRandom } from './rng';
 import type { SortConfig, SortSide, SortState } from './types';
 
@@ -57,9 +58,11 @@ export function stepSortGame(
   let bestCombo = previous.bestCombo;
   let feedback = previous.feedbackTicks > 1 ? previous.feedback : null;
   let feedbackTicks = Math.max(0, previous.feedbackTicks - 1);
+  const difficulty = gameDifficulty(previous.elapsedSeconds, config.durationSeconds);
 
   if (currentItemIndex !== null) {
-    itemProgress += FIXED_TIMESTEP_SECONDS / config.itemFallSeconds;
+    const fallSeconds = config.itemFallSeconds + 0.55 - difficulty.intensity * 1.15;
+    itemProgress += FIXED_TIMESTEP_SECONDS / fallSeconds;
     if (choice) {
       const item = config.items[currentItemIndex];
       if (!item) throw new Error('Sort item index is outside the validated configuration.');
@@ -77,7 +80,8 @@ export function stepSortGame(
       }
       feedbackTicks = 16;
       currentItemIndex = null;
-      nextSpawnTick = tick + Math.round(config.spawnDelaySeconds / FIXED_TIMESTEP_SECONDS);
+      const spawnDelay = config.spawnDelaySeconds + (1 - difficulty.intensity) * 0.18;
+      nextSpawnTick = tick + Math.round(spawnDelay / FIXED_TIMESTEP_SECONDS);
     } else if (itemProgress >= 1) {
       mistakes += 1;
       combo = 0;
@@ -85,7 +89,8 @@ export function stepSortGame(
       feedback = 'bad';
       feedbackTicks = 16;
       currentItemIndex = null;
-      nextSpawnTick = tick + Math.round(config.spawnDelaySeconds / FIXED_TIMESTEP_SECONDS);
+      const spawnDelay = config.spawnDelaySeconds + (1 - difficulty.intensity) * 0.18;
+      nextSpawnTick = tick + Math.round(spawnDelay / FIXED_TIMESTEP_SECONDS);
     }
   }
 
