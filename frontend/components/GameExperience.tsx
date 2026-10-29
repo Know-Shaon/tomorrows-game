@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FIXED_TIMESTEP_SECONDS,
   createDailyGameState,
@@ -12,7 +12,9 @@ import {
   type GamePhase,
 } from '@shared/game';
 import { canvasToBlob, drawShareCard } from '@frontend/lib/share-card';
-import { describeResult } from '@frontend/lib/game-result';
+import { assessMastery, type RunMode } from '@shared/game/mastery';
+import { createEncoreConfig, ENCORE_NAMES } from '@shared/game/encore';
+import { RunResult } from './RunResult';
 import { soundCueForTransition, SynthAudio } from '@frontend/lib/audio';
 import { EngineControls } from './EngineControls';
 import { actionVerbFor, accessibleGameStatus } from '@frontend/lib/player-presentation';
@@ -21,11 +23,16 @@ import { GameCanvas } from './GameCanvas';
 interface GameExperienceProps {
   config: DailyGameConfig;
   bestScore: number;
+  bestTiming: number | null;
+  encoreBest: number | null;
+  encoreUnlocked: boolean;
+  day: number;
+  streak: number;
   reducedMotion: boolean;
   nextGameCountdown: string;
   soundEnabled: boolean;
   onSoundEnabledChange: (enabled: boolean) => void;
-  onFinish: (score: number) => void;
+  onFinish: (state: DailyGameState, config: DailyGameConfig, mode: RunMode) => void;
   onExit: (target?: 'vote') => void;
 }
 
@@ -44,18 +51,6 @@ function neutralInput(config: DailyGameConfig): DailyGameInput {
   if (config.engine === 'timing-v1') return { engine: 'timing-v1', stopAtSeconds: null };
   if (config.engine === 'sequence-v1') return { engine: 'sequence-v1', hit: false };
   return { engine: 'sort-v1', choice: null };
-}
-
-function hudMetric(state: DailyGameState): { label: string; value: string } {
-  if (state.engine === 'defense-v1') return { label: 'Samosa', value: `${state.health}/3` };
-  if (state.engine === 'dodge-v1') return { label: 'Distance', value: `${state.distanceMeters}m` };
-  if (state.engine === 'tap-v1') return { label: 'Combo', value: `×${state.combo}` };
-  if (state.engine === 'classify-v1') return { label: 'Correct', value: state.correct.toString() };
-  if (state.engine === 'timing-v1')
-    return { label: 'Target', value: `${state.targetSeconds.toFixed(2)}s` };
-  if (state.engine === 'sequence-v1')
-    return { label: 'Next floor', value: state.requests[state.requestIndex]?.toString() ?? '—' };
-  return { label: 'Combo', value: `×${state.combo}` };
 }
 
 function isE2eMode(): boolean {
@@ -94,7 +89,12 @@ function SoundToggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => 
 }
 
 export function GameExperience({
-  config,
+  config: dailyConfig,
+  bestTiming,
+  encoreBest,
+  encoreUnlocked,
+  day,
+  streak,
   bestScore,
   reducedMotion,
   nextGameCountdown,
@@ -103,18 +103,26 @@ export function GameExperience({
   onFinish,
   onExit,
 }: GameExperienceProps) {
+  const [mode, setMode] = useState<RunMode>('daily');
+  const config = useMemo(
+    () => (mode === 'encore' ? createEncoreConfig(dailyConfig) : dailyConfig),
+    [dailyConfig, mode],
+  );
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [countdown, setCountdown] = useState(3);
   const [game, setGame] = useState(() => createDailyGameState(config));
   const [message, setMessage] = useState('');
   const [actionCount, setActionCount] = useState(0);
   const [repeatRun, setRepeatRun] = useState(false);
-  const [runBest, setRunBest] = useState(bestScore);
+  const [runBest, setRunBest] = useState<number | null>(
+    config.engine === 'timing-v1' ? bestTiming : bestScore || null,
+  );
   const gameRef = useRef(game);
   const actionQueueRef = useRef<DailyGameInput[]>([]);
   const shareCanvasRef = useRef<HTMLCanvasElement>(null);
   const finishedRef = useRef(false);
   const frameTimeRef = useRef(0);
+  const resultAtRef = useRef<number | null>(null);
   const audioRef = useRef<SynthAudio | null>(null);
 
   useEffect(() => {
@@ -158,26 +166,38 @@ export function GameExperience({
   }, [moveTo]);
 
   const startRun = useCallback(
-    (retry: boolean) => {
-      setCountdown(retry ? 0 : 3);
+    (retry: boolean, nextMode: RunMode = mode) => {
+      if (nextMode === 'encore' && !encoreUnlocked) return;
+      const nextConfig = nextMode === 'encore' ? createEncoreConfig(dailyConfig) : dailyConfig;
+      setMode(nextMode);
+      setCountdown(0);
       setRepeatRun(retry);
-      const next = createDailyGameState(config);
+      const next = createDailyGameState(nextConfig);
       gameRef.current = next;
       setGame(next);
       finishedRef.current = false;
       actionQueueRef.current = [];
-      setRunBest(bestScore);
+      setRunBest(
+        nextMode === 'encore'
+          ? encoreBest
+          : nextConfig.engine === 'timing-v1'
+            ? bestTiming
+            : bestScore || null,
+      );
       setActionCount(0);
       setMessage('');
-      audioRef.current?.play('start');
+      audioRef.current?.play(nextMode !== mode ? 'encore' : 'start');
       if (import.meta.env.DEV) {
+        const isRetry = retry && nextMode === mode;
+        const retryDelayMs =
+          isRetry && resultAtRef.current !== null ? performance.now() - resultAtRef.current : null;
         void import('@frontend/lib/playtest').then(({ recordPlaytestStart }) => {
-          recordPlaytestStart(window.localStorage, config.id, retry);
+          recordPlaytestStart(window.localStorage, dailyConfig.id, isRetry, nextMode, retryDelayMs);
         });
       }
       moveTo('countdown');
     },
-    [bestScore, config, moveTo],
+    [bestScore, bestTiming, encoreBest, encoreUnlocked, dailyConfig, mode, moveTo],
   );
 
   useEffect(() => {
@@ -187,7 +207,7 @@ export function GameExperience({
         if (countdown === 0) moveTo('active');
         else setCountdown((value) => value - 1);
       },
-      repeatRun ? 140 : 360,
+      repeatRun ? 140 : 180,
     );
     return () => window.clearTimeout(timer);
   }, [countdown, moveTo, phase, repeatRun]);
@@ -213,7 +233,7 @@ export function GameExperience({
             config,
           );
           const cue = soundCueForTransition(previous, next);
-          if (cue) audioRef.current?.play(cue);
+          if (cue) audioRef.current?.play(cue, 'combo' in next ? next.combo : 0);
           accumulator -= FIXED_TIMESTEP_SECONDS;
           steps += 1;
         }
@@ -236,27 +256,36 @@ export function GameExperience({
   }, [config, moveTo, phase]);
 
   useEffect(() => {
+    if (phase === 'result') resultAtRef.current = performance.now();
+  }, [phase]);
+
+  useEffect(() => {
     if (phase !== 'game-over') return undefined;
     if (!finishedRef.current) {
       finishedRef.current = true;
       const finishedGame = gameRef.current;
-      audioRef.current?.play(finishedGame.score > runBest ? 'best' : 'result');
+      const result = assessMastery(config, finishedGame);
+      const improved =
+        runBest === null ||
+        (result.lowerIsBetter ? result.performance < runBest : result.performance > runBest);
+      audioRef.current?.play(result.grade === 'S' ? 'rank-s' : improved ? 'best' : 'result');
       if (import.meta.env.DEV) {
         void import('@frontend/lib/playtest').then(({ recordPlaytestFinish }) => {
           recordPlaytestFinish(
             window.localStorage,
-            config.id,
+            dailyConfig.id,
             finishedGame.score,
             mistakeCount(finishedGame),
             finishedGame.elapsedSeconds,
+            { mode, grade: result.grade, perfect: result.medal === 'perfect', improved },
           );
         });
       }
-      onFinish(finishedGame.score);
+      onFinish(finishedGame, config, mode);
     }
     const timer = window.setTimeout(() => moveTo('result'), reducedMotion ? 0 : 260);
     return () => window.clearTimeout(timer);
-  }, [config.id, moveTo, onFinish, phase, reducedMotion, runBest]);
+  }, [config, dailyConfig.id, mode, moveTo, onFinish, phase, reducedMotion, runBest]);
 
   const pause = useCallback(() => {
     if (phase === 'active') moveTo('paused');
@@ -264,28 +293,32 @@ export function GameExperience({
   const resume = useCallback(() => {
     if (phase === 'paused') moveTo('active');
   }, [moveTo, phase]);
-  const queueAction = useCallback((input: DailyGameInput) => {
-    let queued = input;
-    const current = gameRef.current;
-    if (
-      input.engine === 'timing-v1' &&
-      input.stopAtSeconds !== null &&
-      current.engine === 'timing-v1'
-    ) {
-      const sinceFrameSeconds = Math.max(
-        0,
-        Math.min(0.05, (performance.now() - frameTimeRef.current) / 1_000),
-      );
-      queued = {
-        engine: 'timing-v1',
-        stopAtSeconds: current.timerSeconds + sinceFrameSeconds,
-      };
-    }
-    actionQueueRef.current.push(queued);
-    if (actionQueueRef.current.length > 8) actionQueueRef.current.shift();
-    setActionCount((count) => count + 1);
-    if (input.engine === 'dodge-v1') audioRef.current?.play('soft-step');
-  }, []);
+  const queueAction = useCallback(
+    (input: DailyGameInput) => {
+      if (phase !== 'active') return;
+      let queued = input;
+      const current = gameRef.current;
+      if (
+        input.engine === 'timing-v1' &&
+        input.stopAtSeconds !== null &&
+        current.engine === 'timing-v1'
+      ) {
+        const sinceFrameSeconds = Math.max(
+          0,
+          Math.min(0.05, (performance.now() - frameTimeRef.current) / 1_000),
+        );
+        queued = {
+          engine: 'timing-v1',
+          stopAtSeconds: current.timerSeconds + sinceFrameSeconds,
+        };
+      }
+      actionQueueRef.current.push(queued);
+      if (actionQueueRef.current.length > 8) actionQueueRef.current.shift();
+      setActionCount((count) => count + 1);
+      if (input.engine === 'dodge-v1') audioRef.current?.play('soft-step');
+    },
+    [phase],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -297,6 +330,7 @@ export function GameExperience({
         return;
       }
       if (phase !== 'active' || event.repeat) return;
+      if (event.target instanceof HTMLButtonElement && (key === ' ' || key === 'enter')) return;
       const current = gameRef.current;
       if (config.engine === 'defense-v1' && current.engine === 'defense-v1' && key === ' ') {
         const nearest = [...current.threats].sort((a, b) => a.distance - b.distance)[0];
@@ -355,6 +389,34 @@ export function GameExperience({
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [pause, phase]);
 
+  useEffect(() => {
+    const selector =
+      phase === 'instructions'
+        ? '.game-start-button'
+        : phase === 'active'
+          ? '.game-canvas'
+          : phase === 'paused'
+            ? '.pause-overlay button'
+            : null;
+    if (selector) document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+    if (phase !== 'paused') return;
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const buttons = [...document.querySelectorAll<HTMLButtonElement>('.pause-overlay button')];
+      const first = buttons[0],
+        last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener('keydown', trap);
+    return () => document.removeEventListener('keydown', trap);
+  }, [phase]);
+
   const unsupported = useCallback(() => {
     if (phase === 'loading' || phase === 'instructions') moveTo('unsupported');
     else {
@@ -378,8 +440,23 @@ export function GameExperience({
   const createResultBlob = async (): Promise<Blob> => {
     const canvas = shareCanvasRef.current;
     if (!canvas) throw new Error('The result canvas is not ready.');
-    drawShareCard(canvas, config, game);
+    drawShareCard(canvas, config, game, { day, streak, mode });
     return canvasToBlob(canvas);
+  };
+
+  const saveCard = async () => {
+    try {
+      const blob = await createResultBlob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `tomorrows-game-${day}-${mode}.png`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMessage('Card saved.');
+    } catch {
+      setMessage('Could not create the card.');
+    }
   };
 
   const shareResult = async () => {
@@ -438,6 +515,15 @@ export function GameExperience({
           </div>
           <h1 id="game-title">{config.title}</h1>
           <p className="control-hint">{config.controlHint}</p>
+          {(config.engine === 'timing-v1' ? bestTiming !== null : bestScore > 0) && (
+            <p className="personal-target">
+              Beat{' '}
+              {config.engine === 'timing-v1'
+                ? `${bestTiming} ms average`
+                : bestScore.toLocaleString()}
+            </p>
+          )}
+          <p className="mastery-hint">{assessMastery(config, game).target}</p>
           <button
             className="play-button game-start-button"
             type="button"
@@ -448,7 +534,7 @@ export function GameExperience({
         </section>
       </main>
     );
-  if (phase === 'countdown' || phase === 'game-over')
+  if (phase === 'countdown')
     return (
       <main className="game-shell countdown-screen" aria-live="assertive">
         <p>{phase === 'countdown' ? config.title : 'THAT’S THE RUN'}</p>
@@ -457,63 +543,32 @@ export function GameExperience({
     );
 
   if (phase === 'result') {
-    const personalBest = Math.max(runBest, game.score);
-    const isNewBest = game.score > runBest;
-    const result = describeResult(game, personalBest);
     return (
       <main className="game-shell result-screen">
-        <section
-          className={`result-card${isNewBest ? ' new-best' : ''}`}
-          aria-labelledby="result-title"
-        >
-          <p className="eyebrow">{config.title}</p>
-          <h2 className="result-explanation" id="result-title">
-            {result.headline}
-          </h2>
-          <p className="result-verdict">{result.verdict}</p>
-          <p className="score-kicker">SCORE</p>
-          <p className="result-score">{game.score.toLocaleString()}</p>
-          <p className="result-why">{result.explanation}</p>
-          <div className="result-stats">
-            {result.metrics.map((metric) => (
-              <div key={metric.label}>
-                <span>{metric.label}</span>
-                <strong>{metric.value}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="personal-best-result" data-new-best={isNewBest ? 'true' : 'false'}>
-            <span>{isNewBest ? '★ NEW PERSONAL BEST' : 'PERSONAL BEST'}</span>
-            <strong>{result.personalBest}</strong>
-          </div>
-          <div className="result-actions">
-            <button className="play-button" type="button" onClick={() => startRun(true)}>
-              Retry <span aria-hidden="true">↻</span>
-            </button>
-            <button className="secondary-button" type="button" onClick={() => void shareResult()}>
-              Share result
-            </button>
-            <button className="secondary-button" type="button" onClick={() => onExit('vote')}>
-              Vote for tomorrow
-            </button>
-            <button className="secondary-button" type="button" onClick={() => onExit()}>
-              Back to today
-            </button>
-          </div>
-          <p className="tomorrow-countdown">
-            Next tiny game in <strong>{nextGameCountdown}</strong>
-          </p>
-          <SoundToggle enabled={soundEnabled} onToggle={toggleSound} />
-          <p className="share-message" aria-live="polite">
-            {message}
-          </p>
-          <canvas ref={shareCanvasRef} className="share-canvas" aria-hidden="true" />
-        </section>
+        <RunResult
+          config={config}
+          game={game}
+          best={runBest}
+          mode={mode}
+          unlocked={encoreUnlocked}
+          day={day}
+          onRetry={() => startRun(true)}
+          onEncore={() => startRun(true, 'encore')}
+          onDaily={() => startRun(true, 'daily')}
+          onShare={() => void shareResult()}
+          onSave={() => void saveCard()}
+          onExit={onExit}
+        />
+        <SoundToggle enabled={soundEnabled} onToggle={toggleSound} />
+        <p className="tomorrow-countdown">Next game in {nextGameCountdown}</p>
+        <p className="share-message" aria-live="polite">
+          {message}
+        </p>
+        <canvas ref={shareCanvasRef} className="share-canvas" aria-hidden="true" />
       </main>
     );
   }
 
-  const metric = hudMetric(game);
   return (
     <main
       className={`game-shell play-screen game-${config.engine}`}
@@ -521,7 +576,10 @@ export function GameExperience({
       data-engine={config.engine}
     >
       <header className="game-hud">
-        <h1 className="active-game-title">{config.title}</h1>
+        <h1 className="active-game-title">
+          {config.title}
+          {mode === 'encore' && <small> · {ENCORE_NAMES[config.engine]}</small>}
+        </h1>
         <div>
           <span>TIME</span>
           <strong>{Math.max(0, Math.ceil(config.durationSeconds - game.elapsedSeconds))}</strong>
@@ -530,10 +588,9 @@ export function GameExperience({
           <span>SCORE</span>
           <strong>{game.score.toLocaleString()}</strong>
         </div>
-        <div>
-          <span>{metric.label}</span>
-          <strong>{metric.value}</strong>
-        </div>
+        {config.engine !== 'timing-v1' && config.engine !== 'sequence-v1' && runBest !== null && (
+          <p className="hud-target">BEAT {runBest.toLocaleString()}</p>
+        )}
         <SoundToggle enabled={soundEnabled} onToggle={toggleSound} />
         <button className="hud-button" type="button" onClick={phase === 'paused' ? resume : pause}>
           {phase === 'paused' ? 'Resume' : 'Pause'}

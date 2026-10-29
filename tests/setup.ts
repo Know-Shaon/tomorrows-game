@@ -17,6 +17,9 @@ Object.defineProperty(window, 'matchMedia', {
 
 const canvasContext: Partial<CanvasRenderingContext2D> = {
   beginPath: vi.fn(),
+  clip: vi.fn(),
+  strokeText: vi.fn(),
+  drawImage: vi.fn(),
   arc: vi.fn(),
   clearRect: vi.fn(),
   closePath: vi.fn(),

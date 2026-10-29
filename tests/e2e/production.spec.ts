@@ -12,7 +12,7 @@ test('production excludes tuning, experimental renderer and answer hints', async
     files.filter((f) => f.endsWith('.js')).map((f) => readFile(resolve(root, 'assets', f), 'utf8')),
   );
   expect(bundles.join(' ')).not.toMatch(
-    /Show tuning|Reset playtest data|Upcoming safe lane|pixi-laundry-pilot|samosa-defense|laundry-sort/,
+    /Show tuning|Reset playtest data|Upcoming safe lane|pixi-laundry-pilot|samosa-defense|laundry-sort|dev-playtest-v1|retryDelayTotalMs|runsThisSession/,
   );
   const server = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
@@ -68,7 +68,7 @@ test('production excludes tuning, experimental renderer and answer hints', async
     await expect(page.getByRole('button', { name: 'Show tuning' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Finish demo run' })).toHaveCount(0);
     await page.screenshot({
-      path: `screenshots/milestone-2.4/production-${info.project.name}.png`,
+      path: `screenshots/milestone-2.5/legacy/production-${info.project.name}.png`,
     });
   } finally {
     await new Promise<void>((done, reject) =>

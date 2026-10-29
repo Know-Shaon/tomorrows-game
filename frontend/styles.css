@@ -2555,3 +2555,340 @@ h2 {
     grid-column: 1 / -1;
   }
 }
+/* Signature Edition: game-stage transitions, quiet HUD and a compact mastery ticket. */
+.game-hud {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.game-hud > div {
+  border: 0;
+  min-width: 3rem;
+}
+.game-hud .active-game-title {
+  margin-right: auto;
+}
+.active-game-title small {
+  font: inherit;
+  color: #b8d3d1;
+}
+.hud-target {
+  font-size: 0.65rem;
+  color: #d9bc85;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.game-stage {
+  animation: stage-enter 160ms ease-out both;
+}
+.result-screen {
+  gap: 0.5rem;
+}
+.signature-result {
+  width: min(100%, 39rem);
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+.signature-result .eyebrow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.09em;
+}
+.result-icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+}
+.result-grade {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.15rem 0;
+  color: #d5e4de;
+  font: 900 6.5rem/1 system-ui;
+  animation: rank-enter 200ms ease-out both;
+}
+.result-grade[data-grade='S'] {
+  color: #eed095;
+  text-shadow: 0 5px 35px rgba(237, 195, 112, 0.22);
+}
+.result-grade[data-grade='A'] {
+  color: #97dcc3;
+}
+.result-grade span {
+  font: 800 0.65rem system-ui;
+  letter-spacing: 0.12em;
+}
+.signature-result .score-kicker {
+  margin: 0.3rem 0;
+}
+.signature-result .result-score {
+  margin: 0;
+  font: 900 3.6rem/1.1 system-ui;
+  letter-spacing: -0.05em;
+}
+.signature-result .result-score small {
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+.signature-result .result-verdict {
+  margin: 0.5rem 0 0.7rem;
+  color: #bdcecc;
+  font-size: 0.82rem;
+}
+.signature-result .personal-best-result {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: center;
+  margin: 0;
+  border: 0;
+  padding: 0.4rem;
+  background: transparent;
+  font-size: 0.7rem;
+}
+.signature-result .personal-best-result strong {
+  font-size: 0.95rem;
+}
+.chase-message {
+  min-height: 1.4em;
+  margin: 0.3rem 0 0.7rem;
+  color: #dcbd88;
+  font-size: 0.78rem;
+}
+.medal-strip {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 0;
+  margin: 0.6rem 0 1rem;
+  list-style: none;
+}
+.medal-strip li {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #91a6a8;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #53666d;
+}
+.medal-strip li[data-earned='true'] {
+  color: #efce91;
+  border-color: #d4b67a;
+}
+.signature-result .result-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+  margin: 0;
+}
+.signature-result .retry-button {
+  min-height: 3.8rem;
+  color: #142b36;
+  background: linear-gradient(120deg, #f7dd9e, #dfba75);
+  font-size: 1.4rem;
+}
+.encore-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+}
+.encore-button span {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+.run-details {
+  text-align: left;
+  margin: 0.6rem 0 0;
+  color: #bdcecc;
+  font-size: 0.8rem;
+}
+.run-details summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.run-details summary::before {
+  content: '+';
+  margin-right: 0.5rem;
+}
+.run-details[open] summary::before {
+  content: '−';
+}
+.run-details summary:focus-visible {
+  outline: 3px solid #f0d19c;
+  outline-offset: 2px;
+}
+.signature-result .result-stats {
+  margin: 0.7rem 0;
+}
+.result-secondary {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+  border-top: 1px solid #304b56;
+}
+.result-secondary button {
+  font-size: 0.7rem;
+  min-height: 44px;
+  padding: 0.5rem;
+}
+.result-screen > .tomorrow-countdown {
+  font-size: 0.65rem;
+  margin: 0;
+}
+.result-screen > .share-message {
+  margin: 0;
+  min-height: 1rem;
+}
+.personal-target {
+  color: #efd095;
+  font: 800 1.1rem system-ui;
+}
+.mastery-hint {
+  color: #bdcecc;
+  font-size: 0.8rem;
+  margin: 1rem 0;
+}
+.daily-deck {
+  margin: -2rem 0 2.5rem;
+}
+.deck-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 0.6rem;
+}
+.deck-heading strong {
+  font-size: 0.95rem;
+}
+.deck-heading span,
+.daily-deck > p {
+  font-size: 0.75rem;
+  color: #b5c8c7;
+}
+.daily-deck ol {
+  display: flex;
+  gap: 0.55rem;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.daily-deck li {
+  flex: 0 0 5.2rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  border: 1px solid #47636b;
+  border-radius: 0.7rem;
+  padding: 0.5rem;
+  color: #c4d6d0;
+  background: #19333f;
+}
+.daily-deck li[data-medal='great'] {
+  border-color: #81b5a0;
+}
+.daily-deck li[data-medal='perfect'] {
+  border-color: #daba7e;
+  color: #edd39d;
+}
+.daily-deck svg {
+  width: 3rem;
+  height: 3rem;
+}
+.daily-deck li span,
+.daily-deck li b {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+}
+@keyframes stage-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rank-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 42rem) {
+  .game-hud {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.7rem;
+  }
+  .game-hud .active-game-title {
+    flex: 0 0 100%;
+  }
+  .game-hud > div {
+    min-width: 2.7rem;
+  }
+  .game-hud .sound-toggle {
+    margin-left: auto;
+  }
+  .hud-target {
+    font-size: 0.55rem;
+  }
+  .signature-result {
+    padding: 1rem;
+  }
+  .result-grade {
+    font-size: 5.1rem;
+  }
+  .signature-result .result-score {
+    font-size: 3rem;
+  }
+  .signature-result .result-verdict {
+    font-size: 0.72rem;
+  }
+  .medal-strip {
+    margin: 0.4rem 0 0.75rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-stage,
+  .result-grade,
+  .daily-poster {
+    animation: none;
+  }
+  .result-actions button,
+  .game-stage .touch-controls button {
+    transition: none;
+  }
+}
+.signature-result,
+.signature-result.new-best {
+  transform: none;
+  animation: none;
+}
+.signature-result .personal-best-result,
+.signature-result .personal-best-result[data-new-best='true'] {
+  color: #efce91;
+}
+.result-screen {
+  justify-content: center;
+  padding-block: 1rem;
+}
+.signature-result .result-grade {
+  animation: none;
+}

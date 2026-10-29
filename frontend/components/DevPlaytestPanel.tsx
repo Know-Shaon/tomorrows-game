@@ -95,6 +95,21 @@ export function DevPlaytestPanel({ actionCount, config, state }: DevPlaytestPane
             {summary.runsCompleted ? Math.round(summary.totalScore / summary.runsCompleted) : 0} ·
             best {summary.bestScore}
           </span>
+          <span>
+            First complete {summary.runsCompleted > 0 ? 'yes' : 'no'} · session runs{' '}
+            {summary.runsThisSession} · Encore {summary.encoreCompleted}/{summary.encoreStarted}
+          </span>
+          <span>
+            S/A/B/C {summary.gradeS}/{summary.gradeA}/{summary.gradeB}/{summary.gradeC} · Perfect{' '}
+            {summary.perfects} · PB improvements {summary.pbImprovements}
+          </span>
+          <span>
+            Result → Retry{' '}
+            {summary.retryDelaySamples
+              ? Math.round(summary.retryDelayTotalMs / summary.retryDelaySamples)
+              : '—'}{' '}
+            ms average
+          </span>
           <button
             type="button"
             onClick={() => {

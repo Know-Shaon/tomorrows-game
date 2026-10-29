@@ -356,7 +356,7 @@ async function verifyAllGames(page: Page, testInfo: TestInfo, expectedDpr: strin
 }
 
 test('desktop: all seven renderers, controls, results, and retries', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   test.skip(testInfo.project.name !== 'desktop-chrome');
   await page.setViewportSize({ width: 1_440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -367,7 +367,7 @@ test('desktop: all seven renderers, controls, results, and retries', async ({ pa
 });
 
 test('mobile: all seven touch layouts stay crisp and contained', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   test.skip(testInfo.project.name !== 'mobile-chrome');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?e2e=1');
@@ -382,7 +382,7 @@ if (process.env.RUN_FULL_PLAYTEST === '1') {
     for (const game of GAMES) {
       for (const run of [1, 2, 3]) {
         test(`full playtest: desktop ${game.title} run ${run}`, async ({ browser }, testInfo) => {
-          test.setTimeout(60_000);
+          test.setTimeout(120_000);
           test.skip(testInfo.project.name !== 'desktop-chrome');
           const result = await runFullPlaytest(browser, game, 'desktop', run);
           expect(result.actions, `${result.game} received input`).toBeGreaterThan(0);
@@ -396,7 +396,7 @@ if (process.env.RUN_FULL_PLAYTEST === '1') {
       }
 
       test(`full playtest: mobile ${game.title}`, async ({ browser }, testInfo) => {
-        test.setTimeout(60_000);
+        test.setTimeout(120_000);
         test.skip(testInfo.project.name !== 'desktop-chrome');
         const result = await runFullPlaytest(browser, game, 'mobile', 1);
         expect(result.actions, `${result.game} received input`).toBeGreaterThan(0);

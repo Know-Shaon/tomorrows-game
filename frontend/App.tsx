@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getDailyConfig, type DailyGameConfig } from '@shared/game';
+import { getDailyConfig, type DailyGameConfig, type DailyGameState } from '@shared/game';
 import { GameExperience } from '@frontend/components/GameExperience';
 import { TodayPage } from '@frontend/components/TodayPage';
 import { formatCountdown, getDailyInfo } from '@frontend/lib/date';
 import { loadPrototypeState, savePrototypeState, type PrototypeState } from '@frontend/lib/storage';
 import { useReducedMotion } from '@frontend/lib/use-reduced-motion';
 import { useStartGameTool } from '@frontend/lib/webmcp';
+
+import { recordMastery, encoreUnlocked, runKey } from './lib/mastery-storage';
+import type { RunMode } from '@shared/game/mastery';
 
 type View = 'today' | 'game';
 
@@ -41,7 +44,12 @@ export function App() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const startGame = useCallback(() => setView('game'), []);
+  const [runDate, setRunDate] = useState(() => new Date());
+  const runDay = getDailyInfo(runDate).challengeNumber;
+  const startGame = useCallback(() => {
+    setRunDate(new Date());
+    setView('game');
+  }, []);
   useStartGameTool(startGame, config.title);
 
   const updatePrototype = useCallback(
@@ -55,10 +63,10 @@ export function App() {
   );
 
   const finishGame = useCallback(
-    (score: number) => {
+    (state: DailyGameState, playedConfig: DailyGameConfig, mode: RunMode) => {
       setHasPlayedToday(true);
       updatePrototype((current) => {
-        const currentDate = new Date();
+        const currentDate = runDate;
         const today = localDateKey(currentDate);
         const isSameDay = current.stats.lastPlayedDate === today;
         const nextStreak = isSameDay
@@ -68,15 +76,23 @@ export function App() {
             : 1;
         return {
           ...current,
-          bestScores: {
-            ...current.bestScores,
-            [config.id]: Math.max(current.bestScores[config.id] ?? 0, score),
+          bestScores:
+            mode === 'daily'
+              ? {
+                  ...current.bestScores,
+                  [config.id]: Math.max(current.bestScores[config.id] ?? 0, state.score),
+                }
+              : current.bestScores,
+          mastery: recordMastery(current.mastery, playedConfig, state, mode, currentDate),
+          stats: {
+            streak: nextStreak,
+            longestStreak: Math.max(current.stats.longestStreak, nextStreak),
+            lastPlayedDate: today,
           },
-          stats: { streak: nextStreak, lastPlayedDate: today },
         };
       });
     },
-    [config.id, updatePrototype],
+    [config.id, runDate, updatePrototype],
   );
 
   if (view === 'game') {
@@ -86,6 +102,11 @@ export function App() {
           key={config.id}
           config={config}
           bestScore={prototype.bestScores[config.id] ?? 0}
+          day={runDay}
+          streak={prototype.stats.streak}
+          bestTiming={prototype.mastery.records[runKey(runDay, config.id, 'daily')]?.best ?? null}
+          encoreBest={prototype.mastery.records[runKey(runDay, config.id, 'encore')]?.best ?? null}
+          encoreUnlocked={encoreUnlocked(prototype.mastery, runDay, config.id)}
           reducedMotion={reducedMotion}
           soundEnabled={prototype.preferences.soundEnabled}
           onSoundEnabledChange={(soundEnabled) =>
@@ -116,6 +137,8 @@ export function App() {
         countdown={formatCountdown(daily.millisecondsRemaining)}
         bestScore={prototype.bestScores[config.id] ?? 0}
         streak={prototype.stats.streak}
+        longestStreak={prototype.stats.longestStreak}
+        deck={prototype.mastery.deck}
         selectedVote={prototype.votes[daily.challengeNumber.toString()]}
         onPlay={startGame}
         onVote={(candidateId) =>

@@ -137,15 +137,24 @@ export function samosa(
     'rgba(255,248,184,0.65)',
     8,
   );
-  context.fillStyle = '#6fa84d';
-  for (const [peaX, peaY] of [
-    [-13, 18],
-    [25, 48],
-    [-36, 62],
-  ] as const) {
+  // Toasted bubbles and crimped pastry edge, instead of decorative green dots.
+  for (let i = 0; i < 23; i++) {
+    const y = -40 + ((i * 31) % 130);
+    const width = (y + 118) * 0.42;
+    const x = (((i * 47) % 100) / 100 - 0.5) * width * 1.5;
+    context.fillStyle = i % 3 ? 'rgba(151,75,33,.34)' : 'rgba(255,243,169,.7)';
     context.beginPath();
-    context.arc(peaX, peaY, 8, 0, Math.PI * 2);
+    context.ellipse(x, y, 3 + (i % 3), 2 + (i % 2), i, 0, Math.PI * 2);
     context.fill();
+  }
+  context.strokeStyle = '#cf872d';
+  context.lineWidth = 3;
+  for (let i = 0; i < 13; i++) {
+    const x = -78 + i * 13;
+    context.beginPath();
+    context.moveTo(x, 97);
+    context.lineTo(x + 4, 108);
+    context.stroke();
   }
   context.restore();
 }

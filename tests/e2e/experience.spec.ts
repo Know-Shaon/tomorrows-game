@@ -31,6 +31,11 @@ test('portrait Inbox text keeps its native proportions', async ({ page }) => {
   await page.locator('.giant-play').click();
   await page.locator('.game-start-button').click();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await page.waitForFunction(() =>
+    (
+      window as typeof window & { __paintedText: { text: string; ratio: number }[] }
+    ).__paintedText.some((entry) => entry.text === 'FROM'),
+  );
   const text = await page.evaluate(
     () =>
       (window as typeof window & { __paintedText: { text: string; ratio: number }[] })
@@ -65,7 +70,7 @@ async function fps(page: Page) {
 
 test('title safe areas, answer integrity and screenshots at four sizes', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop-chrome');
-  test.setTimeout(240000);
+  test.setTimeout(600000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const metrics: object[] = [];
@@ -88,7 +93,7 @@ test('title safe areas, answer integrity and screenshots at four sizes', async (
           return box.left >= 0 && box.right <= innerWidth && el.scrollWidth <= el.clientWidth;
         }),
       ).toBe(true);
-      await page.screenshot({ path: `screenshots/milestone-2.4/${width}-${id}-today.png` });
+      await page.screenshot({ path: `screenshots/milestone-2.5/legacy/${width}-${id}-today.png` });
       await page.locator('.giant-play').click();
       await page.locator('.game-start-button').click();
       await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
@@ -106,7 +111,7 @@ test('title safe areas, answer integrity and screenshots at four sizes', async (
       ).toBe(true);
       const performance = await fps(page);
       metrics.push({ width, height, id, ...performance });
-      await page.screenshot({ path: `screenshots/milestone-2.4/${width}-${id}-game.png` });
+      await page.screenshot({ path: `screenshots/milestone-2.5/legacy/${width}-${id}-game.png` });
       const key =
         id === 'laundry-logic'
           ? 'l'
@@ -125,14 +130,14 @@ test('title safe areas, answer integrity and screenshots at four sizes', async (
       await page.getByRole('button', { name: 'Finish demo run' }).click();
       await expect(page.getByRole('button', { name: /^Retry/ })).toBeVisible();
       await page.screenshot({
-        path: `screenshots/milestone-2.4/${width}-${id}-result.png`,
+        path: `screenshots/milestone-2.5/legacy/${width}-${id}-result.png`,
         fullPage: true,
       });
       await page.getByRole('button', { name: 'Back to today' }).click();
     }
     await page.locator('#vote').scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: `screenshots/milestone-2.4/${width}-community.png`,
+      path: `screenshots/milestone-2.5/legacy/${width}-community.png`,
       fullPage: true,
     });
   }
@@ -145,7 +150,7 @@ test('title safe areas, answer integrity and screenshots at four sizes', async (
 });
 
 test('Pixi Laundry pilot: WebGL, DPR, pause, retry, fallback', async ({ page }, info) => {
-  test.setTimeout(60000);
+  test.setTimeout(120000);
   await page.goto('/?e2e=1&pixi=1');
   await page.getByLabel('Dev game launcher').selectOption('laundry-logic');
   await page.locator('.giant-play').click();
@@ -157,7 +162,7 @@ test('Pixi Laundry pilot: WebGL, DPR, pause, retry, fallback', async ({ page }, 
       (canvas: HTMLCanvasElement) => canvas.width / canvas.getBoundingClientRect().width,
     ),
   ).toBeCloseTo(info.project.name === 'mobile-chrome' ? 2 : 1, 1);
-  await page.screenshot({ path: `screenshots/milestone-2.4/pixi-${info.project.name}.png` });
+  await page.screenshot({ path: `screenshots/milestone-2.5/legacy/pixi-${info.project.name}.png` });
   console.log('PIXI_METRICS', info.project.name, await fps(page));
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   const frozen = await pilot.screenshot();

@@ -132,7 +132,7 @@ export function describeResult(state: DailyGameState, personalBest: number): Res
             ? 'A tune is forming!'
             : 'Missed the cue',
       explanation:
-        state.misses === 0
+        state.misses === 0 && state.hits === state.requests.length
           ? 'Every requested floor landed; tighter hits earned more precision points.'
           : `Accurate floor hits earned precision points; ${state.misses} missed cues broke the combo.`,
       personalBest: personalBest.toString(),

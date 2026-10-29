@@ -1,6 +1,10 @@
 import type { DailyGameState } from '@shared/game';
 
 export type SoundCue =
+  | 'encore'
+  | 'rank-s'
+  | 'near-miss'
+  | 'save'
   | 'start'
   | 'result'
   | 'best'
@@ -27,6 +31,23 @@ function defaultAudioContext(): AudioContext | null {
 }
 
 const CUES: Readonly<Record<SoundCue, readonly Tone[]>> = {
+  encore: [
+    { frequency: 392, duration: 0.08 },
+    { frequency: 587, duration: 0.12, delay: 0.08 },
+  ],
+  'rank-s': [
+    { frequency: 523, duration: 0.1 },
+    { frequency: 784, duration: 0.1, delay: 0.09 },
+    { frequency: 1046, duration: 0.2, delay: 0.18 },
+  ],
+  'near-miss': [
+    { frequency: 294, duration: 0.05, type: 'triangle' },
+    { frequency: 588, duration: 0.1, delay: 0.04 },
+  ],
+  save: [
+    { frequency: 220, duration: 0.05, type: 'triangle' },
+    { frequency: 880, duration: 0.12, delay: 0.03 },
+  ],
   start: [
     { frequency: 330, duration: 0.06, gain: 0.035 },
     { frequency: 495, duration: 0.08, delay: 0.07, gain: 0.04 },
@@ -64,7 +85,7 @@ export class SynthAudio {
     this.enabled = enabled;
   }
 
-  play(cue: SoundCue): void {
+  play(cue: SoundCue, combo = 0): void {
     if (!this.enabled) return;
     this.context ??= this.createContext();
     const context = this.context;
@@ -77,7 +98,14 @@ export class SynthAudio {
       const begins = start + (tone.delay ?? 0);
       const ends = begins + tone.duration;
       oscillator.type = tone.type ?? 'sine';
-      oscillator.frequency.setValueAtTime(tone.frequency, begins);
+      const phrase = [0, 3, 7, 10, 7, 5, 3, 12];
+      const semitones =
+        cue === 'elevator-note'
+          ? (phrase[Math.max(0, combo - 1) % phrase.length] ?? 0)
+          : cue === 'success'
+            ? Math.min(5, Math.floor(combo / 3)) * 2
+            : 0;
+      oscillator.frequency.setValueAtTime(tone.frequency * 2 ** (semitones / 12), begins);
       gain.gain.setValueAtTime(tone.gain ?? 0.03, begins);
       gain.gain.exponentialRampToValueAtTime(0.0001, ends);
       oscillator.connect(gain);
@@ -98,6 +126,10 @@ export function soundCueForTransition(
   next: DailyGameState,
 ): SoundCue | null {
   if (previous.engine !== next.engine) return null;
+  if (next.signature?.tick === next.tick && next.signature !== previous.signature) {
+    if (next.signature.kind === 'save') return 'save';
+    if (next.signature.kind === 'near-miss') return 'near-miss';
+  }
   if (next.engine === 'defense-v1' && previous.engine === 'defense-v1') {
     if (next.shooed > previous.shooed) return 'success';
     if (next.health < previous.health) return 'failure';

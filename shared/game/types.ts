@@ -187,6 +187,7 @@ export type DailyGameConfig =
   | SortConfig;
 
 interface BaseSimulationState {
+  signature?: import('./signature').SignatureEvent;
   engine: GameEngineId;
   configId: string;
   phase: SimulationPhase;

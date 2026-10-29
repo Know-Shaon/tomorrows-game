@@ -62,12 +62,9 @@ export function stepSequenceGame(
     previous.requestIndex / Math.max(1, previous.requests.length - 1),
   );
   const requestedFloor = previous.requests[previous.requestIndex];
-  const direction: -1 | 1 =
-    requestedFloor === undefined
-      ? previous.direction
-      : requestedFloor >= previous.currentFloor
-        ? 1
-        : -1;
+  // Keep travelling through this floor's window. Reversing at its centre would
+  // let an unanswered request oscillate forever and make late hits count.
+  const direction = previous.direction;
   const speed = config.travelFloorsPerSecond + difficulty.intensity * config.speedRamp * 3;
   const currentFloor = previous.currentFloor + direction * speed * FIXED_TIMESTEP_SECONDS;
   const hitWindow = config.hitWindowFloors * (1.25 - difficulty.intensity * 0.35);
@@ -127,7 +124,12 @@ export function stepSequenceGame(
     feedbackTicks,
     endedReason: completed ? 'complete' : null,
     currentFloor,
-    direction,
+    direction:
+      requestIndex !== previous.requestIndex && previous.requests[requestIndex] !== undefined
+        ? previous.requests[requestIndex]! >= currentFloor
+          ? 1
+          : -1
+        : direction,
     requestIndex,
     hits,
     misses,

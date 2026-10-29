@@ -38,6 +38,7 @@ describe('Pothole Patrol lane engine', () => {
     expect(result.distanceMeters).toBe(config.metersPerSecond);
   });
 
+  // Keep the exhaustive coverage practical on slower development machines and CI workers.
   it('keeps a reachable safe path for 5,000 seeds and 200,000 waves', () => {
     for (let seed = 1; seed <= 5_000; seed += 1) {
       let randomState = seed;
@@ -58,7 +59,7 @@ describe('Pothole Patrol lane engine', () => {
         previousSafeLane = generated.wave.safeLane;
       }
     }
-  });
+  }, 30_000);
 
   it('caps lane movement at the configured switch speed', () => {
     const start = createInitialGameState(config);

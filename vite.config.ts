@@ -5,6 +5,19 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react(), cloudflare()],
+  // Generated browser traces contain HTML. Watching them causes reload work and
+  // can hit OneDrive file locks while tests are still writing their evidence.
+  server: {
+    watch: {
+      ignored: [
+        '**/.cache/**',
+        '**/test-results/**',
+        '**/screenshots/**',
+        '**/playwright-report/**',
+        '**/outputs/**',
+      ],
+    },
+  },
   resolve: {
     alias: {
       '@frontend': fileURLToPath(new URL('./frontend', import.meta.url)),

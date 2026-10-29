@@ -13,7 +13,7 @@ Milestone 2.4 removes answer hints, separates titles from art, reduces copy, mov
 Requirements: Node.js 22+ and npm.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -31,7 +31,15 @@ npm run test:e2e
 git diff --check
 ```
 
-Playwright uses the locally installed Chrome channel. Development builds include a compact local playtest panel; the `?e2e=1` route also exposes a deterministic “Finish demo run” control. Both are removed from production builds.
+Playwright uses its managed Chromium browser. Install it on a new machine with `npx playwright install chromium`, then run `npm run test:e2e`. Development builds include a compact local playtest panel; the `?e2e=1` route also exposes a deterministic “Finish demo run” control. Both are removed from production builds.
+
+## Personal-PC checkpoint
+
+The checkpoint includes the M2.5 implementation and M2.6 preproduction documents. M2.6 remains incomplete; its working direction is Painted Workshop. Start with `docs/MILESTONE_2_6_REPORT.md` and `docs/MILESTONE_2_6_ART_BIBLE.md` before continuing art production.
+
+Use Node.js 24 to match CI, run `npm ci`, and install Playwright Chromium as above. The app requires no credentials. Any future offline KIE work must read its credential from the local environment; do not copy credentials from this machine or put them into source files.
+
+Ignored screenshots, browser traces, `.cache` scripts, generated art and local editor settings are not included in a Git clone. Historical evidence links to those local paths may therefore be unavailable on the new PC. The portable art direction and checkpoint status are in `docs/`; do not copy the VM-specific Playwright configuration from `.cache`.
 
 ## Structure
 

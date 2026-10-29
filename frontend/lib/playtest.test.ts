@@ -8,6 +8,24 @@ import {
 } from './playtest';
 
 describe('development playtest telemetry', () => {
+  it('records Encore, exact retry delay, grades, Perfect and PB improvements locally', () => {
+    recordPlaytestStart(window.localStorage, 'signature', true, 'encore', 734);
+    recordPlaytestFinish(window.localStorage, 'signature', 1000, 0, 20, {
+      mode: 'encore',
+      grade: 'S',
+      perfect: true,
+      improved: true,
+    });
+    expect(loadPlaytestSummary(window.localStorage, 'signature')).toMatchObject({
+      encoreStarted: 1,
+      encoreCompleted: 1,
+      gradeS: 1,
+      perfects: 1,
+      pbImprovements: 1,
+      retryDelayTotalMs: 734,
+      retryDelaySamples: 1,
+    });
+  });
   beforeEach(() => window.localStorage.clear());
 
   it('records starts, retries, completions, scores, mistakes, and duration separately', () => {

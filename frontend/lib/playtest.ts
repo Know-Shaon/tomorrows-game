@@ -1,6 +1,21 @@
+import type { Grade, RunMode } from '@shared/game/mastery';
+const sessionStartedAt = Date.now();
+let runsThisSession = 0;
 export const PLAYTEST_STORAGE_KEY = 'tomorrows-game:dev-playtest-v1';
 
 export interface PlaytestGameSummary {
+  encoreStarted: number;
+  encoreCompleted: number;
+  perfects: number;
+  pbImprovements: number;
+  gradeS: number;
+  gradeA: number;
+  gradeB: number;
+  gradeC: number;
+  retryDelayTotalMs: number;
+  retryDelaySamples: number;
+  sessionStartedAt: number;
+  runsThisSession: number;
   runsStarted: number;
   runsCompleted: number;
   retries: number;
@@ -18,6 +33,18 @@ interface PlaytestStore {
 type PlaytestStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const EMPTY_SUMMARY: PlaytestGameSummary = {
+  encoreStarted: 0,
+  encoreCompleted: 0,
+  perfects: 0,
+  pbImprovements: 0,
+  gradeS: 0,
+  gradeA: 0,
+  gradeB: 0,
+  gradeC: 0,
+  retryDelayTotalMs: 0,
+  retryDelaySamples: 0,
+  sessionStartedAt: 0,
+  runsThisSession: 0,
   runsStarted: 0,
   runsCompleted: 0,
   retries: 0,
@@ -38,6 +65,18 @@ function safeCount(value: unknown): number {
 function parseSummary(value: unknown): PlaytestGameSummary {
   if (!isRecord(value)) return { ...EMPTY_SUMMARY };
   return {
+    encoreStarted: safeCount(value.encoreStarted),
+    encoreCompleted: safeCount(value.encoreCompleted),
+    perfects: safeCount(value.perfects),
+    pbImprovements: safeCount(value.pbImprovements),
+    gradeS: safeCount(value.gradeS),
+    gradeA: safeCount(value.gradeA),
+    gradeB: safeCount(value.gradeB),
+    gradeC: safeCount(value.gradeC),
+    retryDelayTotalMs: safeCount(value.retryDelayTotalMs),
+    retryDelaySamples: safeCount(value.retryDelaySamples),
+    sessionStartedAt: safeCount(value.sessionStartedAt),
+    runsThisSession: safeCount(value.runsThisSession),
     runsStarted: safeCount(value.runsStarted),
     runsCompleted: safeCount(value.runsCompleted),
     retries: safeCount(value.retries),
@@ -76,19 +115,28 @@ function saveStore(storage: PlaytestStorage, store: PlaytestStore): void {
 }
 
 export function loadPlaytestSummary(storage: PlaytestStorage, gameId: string): PlaytestGameSummary {
-  return loadStore(storage).games[gameId] ?? { ...EMPTY_SUMMARY };
+  const summary = loadStore(storage).games[gameId] ?? { ...EMPTY_SUMMARY };
+  return { ...summary, runsThisSession };
 }
 
 export function recordPlaytestStart(
   storage: PlaytestStorage,
   gameId: string,
   retry: boolean,
+  mode: RunMode = 'daily',
+  retryDelayMs: number | null = null,
 ): void {
   const store = loadStore(storage);
   const summary = store.games[gameId] ?? { ...EMPTY_SUMMARY };
   store.games[gameId] = {
     ...summary,
     runsStarted: summary.runsStarted + 1,
+    encoreStarted: summary.encoreStarted + (mode === 'encore' ? 1 : 0),
+    retryDelayTotalMs:
+      summary.retryDelayTotalMs + (retry && retryDelayMs !== null ? Math.max(0, retryDelayMs) : 0),
+    retryDelaySamples: summary.retryDelaySamples + (retry && retryDelayMs !== null ? 1 : 0),
+    sessionStartedAt,
+    runsThisSession: ++runsThisSession,
     retries: summary.retries + (retry ? 1 : 0),
   };
   saveStore(storage, store);
@@ -100,12 +148,20 @@ export function recordPlaytestFinish(
   score: number,
   mistakes: number,
   durationSeconds: number,
+  outcome?: { mode: RunMode; grade: Grade; perfect: boolean; improved: boolean },
 ): void {
   const store = loadStore(storage);
   const summary = store.games[gameId] ?? { ...EMPTY_SUMMARY };
   store.games[gameId] = {
     ...summary,
     runsCompleted: summary.runsCompleted + 1,
+    encoreCompleted: summary.encoreCompleted + (outcome?.mode === 'encore' ? 1 : 0),
+    perfects: summary.perfects + (outcome?.perfect ? 1 : 0),
+    pbImprovements: summary.pbImprovements + (outcome?.improved ? 1 : 0),
+    gradeS: summary.gradeS + (outcome?.grade === 'S' ? 1 : 0),
+    gradeA: summary.gradeA + (outcome?.grade === 'A' ? 1 : 0),
+    gradeB: summary.gradeB + (outcome?.grade === 'B' ? 1 : 0),
+    gradeC: summary.gradeC + (outcome?.grade === 'C' ? 1 : 0),
     totalScore: summary.totalScore + Math.max(0, score),
     bestScore: Math.max(summary.bestScore, score),
     totalMistakes: summary.totalMistakes + Math.max(0, mistakes),
@@ -115,5 +171,6 @@ export function recordPlaytestFinish(
 }
 
 export function resetPlaytestData(storage: PlaytestStorage): void {
+  runsThisSession = 0;
   storage.removeItem(PLAYTEST_STORAGE_KEY);
 }

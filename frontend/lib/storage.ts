@@ -1,8 +1,11 @@
+import { emptyMastery, parseMastery, type MasteryStore } from './mastery-storage';
+
 export const STORAGE_KEY = 'tomorrows-game:prototype';
 export const STORAGE_VERSION = 1;
 
 export interface PrototypeState {
   version: 1;
+  mastery: MasteryStore;
   bestScores: Record<string, number>;
   preferences: {
     soundEnabled: boolean;
@@ -14,6 +17,7 @@ export interface PrototypeState {
   }>;
   stats: {
     streak: number;
+    longestStreak: number;
     lastPlayedDate: string | null;
   };
 }
@@ -28,11 +32,12 @@ const defaultReporter: StorageReporter = (message, error) => {
 export function createDefaultPrototypeState(): PrototypeState {
   return {
     version: STORAGE_VERSION,
+    mastery: emptyMastery(),
     bestScores: {},
     preferences: { soundEnabled: false },
     votes: {},
     suggestions: [],
-    stats: { streak: 0, lastPlayedDate: null },
+    stats: { streak: 0, longestStreak: 0, lastPlayedDate: null },
   };
 }
 
@@ -72,6 +77,7 @@ function parseCurrentState(value: unknown): PrototypeState | null {
 
   return {
     version: STORAGE_VERSION,
+    mastery: parseMastery(value.mastery),
     bestScores: safeScoreRecord(value.bestScores),
     preferences: { soundEnabled: preferences.soundEnabled === true },
     votes: isRecord(value.votes)
@@ -88,8 +94,18 @@ function parseCurrentState(value: unknown): PrototypeState | null {
       Number.isInteger(value.stats.streak) &&
       value.stats.streak >= 0 &&
       (typeof value.stats.lastPlayedDate === 'string' || value.stats.lastPlayedDate === null)
-        ? { streak: value.stats.streak, lastPlayedDate: value.stats.lastPlayedDate }
-        : { streak: 0, lastPlayedDate: null },
+        ? {
+            streak: value.stats.streak,
+            longestStreak: Math.max(
+              value.stats.streak,
+              typeof value.stats.longestStreak === 'number' &&
+                Number.isInteger(value.stats.longestStreak)
+                ? value.stats.longestStreak
+                : 0,
+            ),
+            lastPlayedDate: value.stats.lastPlayedDate,
+          }
+        : { streak: 0, longestStreak: 0, lastPlayedDate: null },
   };
 }
 

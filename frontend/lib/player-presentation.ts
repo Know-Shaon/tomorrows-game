@@ -1,3 +1,4 @@
+import { concealedTimer } from '@shared/game/encore';
 import type { DailyGameConfig, DailyGameState } from '@shared/game';
 
 export function actionVerbFor(config: DailyGameConfig): string {
@@ -36,7 +37,7 @@ export function accessibleGameStatus(config: DailyGameConfig, state: DailyGameSt
     return card ? `Message from ${card.sender}: ${card.subject}.` : 'Waiting for the next message.';
   }
   if (state.engine === 'timing-v1')
-    return `Round ${Math.min(state.round, config.engine === 'timing-v1' ? config.targetsSeconds.length : 1)}. Timer ${state.timerSeconds.toFixed(2)} seconds. Target ${state.targetSeconds.toFixed(2)} seconds.`;
+    return `Round ${Math.min(state.round, config.engine === 'timing-v1' ? config.targetsSeconds.length : 1)}. Timer ${concealedTimer(config, state.timerSeconds, state.targetSeconds, state.waitingTicks) ? 'hidden' : state.timerSeconds.toFixed(2)} seconds. Target ${state.targetSeconds.toFixed(2)} seconds.`;
   if (state.engine === 'sequence-v1')
     return `Current floor ${state.currentFloor.toFixed(1)}. Hit floor ${state.requests[state.requestIndex] ?? 'complete'}.`;
   if (config.engine !== 'sort-v1') return 'Waiting for the next garment.';

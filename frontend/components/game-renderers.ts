@@ -23,6 +23,19 @@ import {
   type TimingConfig,
   type TimingState,
 } from '@shared/game';
+import { staticLayer } from '@frontend/lib/scene-cache';
+import {
+  carActor,
+  pigeonActor,
+  mosquitoActor,
+  brassCab,
+  elevatorDoors,
+  material,
+  panel,
+  ellipse,
+} from '@frontend/lib/signature-art';
+import { drawSignature } from '@frontend/lib/signature-fx';
+import { concealedTimer, isEncore } from '@shared/game/encore';
 import { samosa } from '@frontend/lib/scene-art';
 
 export type RendererId =
@@ -117,37 +130,7 @@ function drawPigeon(
   context.scale(1, Math.min(1, ratio));
   context.rotate(angle + Math.PI);
   context.scale(scale, scale);
-  context.fillStyle = '#43566e';
-  context.strokeStyle = COLORS.navy;
-  context.lineWidth = 8;
-  context.beginPath();
-  context.ellipse(0, 0, 42, 29, 0, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
-  context.fillStyle = '#6f849b';
-  const wingLift = Math.sin(wingPhase) * 28;
-  context.beginPath();
-  context.moveTo(-8, -5);
-  context.quadraticCurveTo(-65, -65 - wingLift, -84, wingLift * -0.35);
-  context.quadraticCurveTo(-42, -20, -5, 13);
-  context.fill();
-  context.stroke();
-  context.fillStyle = '#b9e75d';
-  context.beginPath();
-  context.arc(35, -21, 21, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
-  context.fillStyle = COLORS.coral;
-  context.beginPath();
-  context.moveTo(52, -22);
-  context.lineTo(76, -15);
-  context.lineTo(53, -8);
-  context.closePath();
-  context.fill();
-  context.fillStyle = COLORS.cream;
-  context.beginPath();
-  context.arc(40, -27, 5, 0, Math.PI * 2);
-  context.fill();
+  pigeonActor(context, wingPhase);
   context.restore();
 }
 
@@ -161,7 +144,7 @@ function feedbackEffects(
   context.save();
   context.globalAlpha = Math.min(0.72, state.feedbackTicks / 20);
   context.strokeStyle = color;
-  context.lineWidth = 20;
+  context.lineWidth = 6;
   context.strokeRect(12, 12, WORLD_WIDTH - 24, WORLD_HEIGHT - 24);
   if (!reducedMotion) {
     for (let index = 0; index < 12; index += 1) {
@@ -200,33 +183,63 @@ function drawDefense(
   state: DefenseState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#f2a86f', '#ffd07a');
-  const sun = context.createRadialGradient(775, 105, 10, 775, 105, 145);
-  sun.addColorStop(0, 'rgba(255,245,198,0.95)');
-  sun.addColorStop(0.35, 'rgba(255,218,115,0.68)');
-  sun.addColorStop(1, 'rgba(255,174,94,0)');
-  context.fillStyle = sun;
-  context.fillRect(610, 0, 330, 290);
-  context.fillStyle = '#d9674b';
-  context.fillRect(0, 150, 1_000, 210);
-  context.fillStyle = '#754d45';
-  for (let x = 25; x < 1_000; x += 115) {
-    context.fillRect(x, 185 + ((x / 115) % 2) * 30, 80, 120);
-    context.fillStyle = 'rgba(255,222,125,0.55)';
-    context.fillRect(x + 16, 218 + ((x / 115) % 2) * 30, 12, 18);
-    context.fillRect(x + 48, 254 + ((x / 115) % 2) * 30, 12, 18);
+  staticLayer(context, 'rooftop', (context) => {
+    fillBackground(context, '#f2a86f', '#ffd07a');
+    const sun = context.createRadialGradient(775, 105, 10, 775, 105, 145);
+    sun.addColorStop(0, 'rgba(255,245,198,0.95)');
+    sun.addColorStop(0.35, 'rgba(255,218,115,0.68)');
+    sun.addColorStop(1, 'rgba(255,174,94,0)');
+    context.fillStyle = sun;
+    context.fillRect(610, 0, 330, 290);
+    context.fillStyle = '#d9674b';
+    context.fillRect(0, 150, 1_000, 210);
     context.fillStyle = '#754d45';
-  }
-  context.fillStyle = '#2e6d6a';
-  context.fillRect(0, 360, 1_000, 640);
-  context.strokeStyle = '#285f5d';
-  context.lineWidth = 5;
-  for (let x = -200; x < 1_200; x += 110) {
+    for (let x = 25; x < 1_000; x += 115) {
+      context.fillRect(x, 185 + ((x / 115) % 2) * 30, 80, 120);
+      context.fillStyle = 'rgba(255,222,125,0.55)';
+      context.fillRect(x + 16, 218 + ((x / 115) % 2) * 30, 12, 18);
+      context.fillRect(x + 48, 254 + ((x / 115) % 2) * 30, 12, 18);
+      context.fillStyle = '#754d45';
+    }
+    context.fillStyle = '#2e6d6a';
+    context.fillRect(0, 360, 1_000, 640);
+    context.strokeStyle = '#285f5d';
+    context.lineWidth = 5;
+    for (let x = -200; x < 1_200; x += 110) {
+      context.beginPath();
+      context.moveTo(x, 360);
+      context.lineTo(x + 250, 1_000);
+      context.stroke();
+    }
+    // Rooftop silhouettes, cable, awning and pot establish scale around the plate.
+    context.strokeStyle = '#6f4943';
+    context.lineWidth = 5;
     context.beginPath();
-    context.moveTo(x, 360);
-    context.lineTo(x + 250, 1_000);
+    context.moveTo(0, 145);
+    context.quadraticCurveTo(500, 230, 1000, 125);
     context.stroke();
-  }
+    for (let i = 0; i < 10; i++) {
+      ellipse(context, 50 + i * 106, 155 + Math.sin(i * 0.34) * 38, 4, 6, '#fff0b0');
+    }
+    for (let x = 30; x < 1000; x += 125) {
+      panel(context, x, 170, 8, 75, '#5a4d46', 0);
+      panel(context, x - 20, 176, 49, 4, '#5a4d46', 0);
+    }
+    panel(context, 0, 347, 1000, 23, '#224f50', 0);
+    panel(context, 0, 347, 1000, 5, '#e7b583', 0);
+    context.save();
+    preserveObjectAspect(context, 905, 720);
+    ellipse(context, 905, 779, 61, 16, 'rgba(5,40,44,.23)');
+    panel(context, 860, 702, 88, 65, '#c87d59', 12);
+    for (let i = 0; i < 5; i++) {
+      context.save();
+      context.translate(905, 701);
+      context.rotate((i - 2) * 0.45);
+      ellipse(context, 0, -42, 16, 55, i % 2 ? '#386b58' : '#5d9471');
+      context.restore();
+    }
+    context.restore();
+  });
   context.save();
   preserveObjectAspect(context, 500, 550);
   context.fillStyle = COLORS.cream;
@@ -324,28 +337,44 @@ function drawDodge(
   state: DodgeState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#67c8d8', '#efc57e');
-  context.fillStyle = 'rgba(255,236,158,0.78)';
-  context.beginPath();
-  context.arc(790, 95, 64, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = '#21485a';
-  for (let x = 0; x < 1_000; x += 90) {
-    const height = 90 + ((x * 17) % 150);
-    context.fillRect(x, 250 - height, 72, height);
-    context.fillStyle = 'rgba(246,223,73,0.48)';
-    context.fillRect(x + 14, 205 - height, 10, 14);
-    context.fillRect(x + 45, 225 - height, 10, 14);
+  staticLayer(context, 'street', (context) => {
+    fillBackground(context, '#67c8d8', '#efc57e');
+    context.fillStyle = 'rgba(255,236,158,0.78)';
+    context.beginPath();
+    context.arc(790, 95, 64, 0, Math.PI * 2);
+    context.fill();
     context.fillStyle = '#21485a';
-  }
-  context.fillStyle = '#39424b';
-  context.beginPath();
-  context.moveTo(390, 250);
-  context.lineTo(610, 250);
-  context.lineTo(970, 1_000);
-  context.lineTo(30, 1_000);
-  context.closePath();
-  context.fill();
+    for (let x = 0; x < 1_000; x += 90) {
+      const height = 90 + ((x * 17) % 150);
+      context.fillRect(x, 250 - height, 72, height);
+      context.fillStyle = 'rgba(246,223,73,0.48)';
+      context.fillRect(x + 14, 205 - height, 10, 14);
+      context.fillRect(x + 45, 225 - height, 10, 14);
+      context.fillStyle = '#21485a';
+    }
+    context.fillStyle = '#39424b';
+    context.beginPath();
+    context.moveTo(390, 250);
+    context.lineTo(610, 250);
+    context.lineTo(970, 1_000);
+    context.lineTo(30, 1_000);
+    context.closePath();
+    context.fill();
+    context.strokeStyle = '#d8c899';
+    context.lineWidth = 7;
+    context.beginPath();
+    context.moveTo(389, 250);
+    context.lineTo(28, 1000);
+    context.moveTo(611, 250);
+    context.lineTo(972, 1000);
+    context.stroke();
+    for (let x = 0; x < 1000; x += 90) {
+      for (let y = 120; y < 240; y += 22) {
+        context.fillStyle = 'rgba(217,225,176,.25)';
+        context.fillRect(x + 13, y, 8, 10);
+      }
+    }
+  });
   context.strokeStyle = 'rgba(255,255,255,0.18)';
   context.lineWidth = 5;
   const roadScroll = reducedMotion ? 0 : (state.tick * 7) % 96;
@@ -400,42 +429,12 @@ function drawDodge(
   context.save();
   preserveObjectAspect(context, playerX, 830);
   context.translate(playerX, 830);
-  const steeringLean = (state.targetLane - state.playerLanePosition) * 0.13;
-  const bump =
-    !reducedMotion && state.feedback === 'bad' && state.feedbackTicks > 0
-      ? state.feedbackTicks * 0.45
-      : 0;
-  context.translate(0, bump);
-  context.rotate(steeringLean);
-  context.fillStyle = COLORS.coral;
-  context.strokeStyle = COLORS.navy;
-  context.lineWidth = 12;
-  context.beginPath();
-  context.roundRect(-70, -80, 140, 145, 32);
-  context.fill();
-  context.stroke();
-  context.fillStyle = COLORS.cyan;
-  context.beginPath();
-  context.roundRect(-48, -54, 96, 47, 10);
-  context.fill();
-  context.fillStyle = 'rgba(255,255,255,0.66)';
-  context.fillRect(-39, -45, 12, 30);
-  context.fillStyle = COLORS.yellow;
-  context.beginPath();
-  context.arc(-44, 67, 22, 0, Math.PI * 2);
-  context.arc(44, 67, 22, 0, Math.PI * 2);
-  context.fill();
-  if (!reducedMotion) {
-    context.strokeStyle = COLORS.navy;
-    context.lineWidth = 5;
-    const wheelAngle = state.tick * 0.38;
-    for (const x of [-44, 44]) {
-      context.beginPath();
-      context.moveTo(x - Math.cos(wheelAngle) * 16, 67 - Math.sin(wheelAngle) * 16);
-      context.lineTo(x + Math.cos(wheelAngle) * 16, 67 + Math.sin(wheelAngle) * 16);
-      context.stroke();
-    }
-  }
+  carActor(
+    context,
+    reducedMotion ? 0 : state.tick,
+    reducedMotion ? 0 : (state.targetLane - state.playerLanePosition) * 0.13,
+    !reducedMotion && state.feedback === 'bad' ? state.feedbackTicks * 0.4 : 0,
+  );
   context.restore();
   context.fillStyle = 'rgba(7,23,43,0.85)';
   context.fillRect(20, 20, 320, 82);
@@ -460,23 +459,7 @@ function drawTapToken(
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 9;
   if (token === 'mosquito') {
-    context.fillStyle = COLORS.coral;
-    context.beginPath();
-    context.ellipse(0, 0, 15, 32, 0, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-    context.strokeStyle = COLORS.cream;
-    context.beginPath();
-    const wing = Math.sin(wingPhase) * 18;
-    context.moveTo(-8, -8);
-    context.lineTo(-46, -34 - wing);
-    context.moveTo(8, -8);
-    context.lineTo(46, -34 + wing);
-    context.moveTo(-8, 8);
-    context.lineTo(-48, 38 + wing);
-    context.moveTo(8, 8);
-    context.lineTo(48, 38 - wing);
-    context.stroke();
+    mosquitoActor(context, wingPhase);
   } else if (token === 'coffee') {
     context.fillStyle = COLORS.cream;
     context.beginPath();
@@ -521,49 +504,83 @@ function drawTap(
   state: TapState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#19123e', '#392458');
-  const lamp = context.createRadialGradient(760, 170, 20, 760, 170, 330);
-  lamp.addColorStop(0, 'rgba(246,223,73,0.65)');
-  lamp.addColorStop(1, 'rgba(246,223,73,0)');
-  context.save();
-  context.globalAlpha = reducedMotion ? 1 : 0.82 + Math.sin(state.tick * 0.08) * 0.18;
-  context.fillStyle = lamp;
-  context.fillRect(400, 0, 600, 650);
-  context.restore();
-  context.fillStyle = '#633f35';
-  context.fillRect(0, 730, 1_000, 270);
-  context.save();
-  preserveObjectAspect(context, 500, 850);
-  context.fillStyle = '#20172a';
-  context.fillRect(75, 760, 360, 170);
-  context.strokeStyle = COLORS.cyan;
-  context.lineWidth = 8;
-  context.strokeRect(75, 760, 360, 170);
-  context.fillStyle = 'rgba(86,231,237,0.12)';
-  context.fillRect(98, 785, 314, 118);
-  context.fillStyle = '#8da0bb';
-  for (let row = 0; row < 3; row += 1) {
-    for (let column = 0; column < 8; column += 1) {
-      context.fillRect(102 + column * 37, 812 + row * 27, 24, 11);
+  staticLayer(context, 'office', (context) => {
+    fillBackground(context, '#19123e', '#392458');
+    const lamp = context.createRadialGradient(760, 170, 20, 760, 170, 330);
+    lamp.addColorStop(0, 'rgba(246,223,73,0.65)');
+    lamp.addColorStop(1, 'rgba(246,223,73,0)');
+    context.save();
+    context.globalAlpha = 1;
+    context.fillStyle = lamp;
+    context.fillRect(400, 0, 600, 650);
+    context.restore();
+    panel(context, 60, 155, 410, 405, '#26384e', 12);
+    panel(context, 76, 169, 378, 373, '#111d39', 4);
+    for (let i = 0; i < 8; i++) {
+      const h = 40 + ((i * 41) % 150);
+      panel(context, 85 + i * 46, 535 - h, 34, h, '#28445a', 0);
+      for (let j = 0; j < 3; j++) panel(context, 90 + i * 46, 535 - h + j * 29, 6, 9, '#aa937c', 0);
     }
+    panel(context, 259, 162, 12, 380, '#56657e', 0);
+    panel(context, 65, 330, 400, 10, '#56657e', 0);
+    context.strokeStyle = '#766882';
+    context.lineWidth = 12;
+    context.beginPath();
+    context.moveTo(880, 738);
+    context.lineTo(880, 405);
+    context.lineTo(775, 228);
+    context.stroke();
+    context.fillStyle = '#d5b077';
+    context.beginPath();
+    context.moveTo(710, 263);
+    context.lineTo(830, 235);
+    context.lineTo(790, 163);
+    context.closePath();
+    context.fill();
+    panel(context, 0, 730, 1000, 19, '#d39b71', 0);
+    context.fillStyle = '#633f35';
+    context.fillRect(0, 730, 1_000, 270);
+    context.save();
+    preserveObjectAspect(context, 500, 850);
+    context.fillStyle = '#20172a';
+    context.fillRect(75, 760, 360, 170);
+    context.strokeStyle = COLORS.cyan;
+    context.lineWidth = 8;
+    context.strokeRect(75, 760, 360, 170);
+    context.fillStyle = 'rgba(86,231,237,0.12)';
+    context.fillRect(98, 785, 314, 118);
+    context.fillStyle = '#8da0bb';
+    for (let row = 0; row < 3; row += 1) {
+      for (let column = 0; column < 8; column += 1) {
+        context.fillRect(102 + column * 37, 812 + row * 27, 24, 11);
+      }
+    }
+    context.fillStyle = COLORS.cream;
+    context.beginPath();
+    context.roundRect(700, 770, 120, 120, 16);
+    context.fill();
+    context.strokeStyle = COLORS.navy;
+    context.stroke();
+    context.fillStyle = '#8f5539';
+    context.beginPath();
+    context.ellipse(760, 796, 41, 18, 0, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = 'rgba(255,245,223,0.5)';
+    context.lineWidth = 6;
+    context.beginPath();
+    context.moveTo(742, 742);
+    context.quadraticCurveTo(716, 704, 748, 675);
+    context.stroke();
+    context.restore();
+    for (let i = 0; i < 9; i++) {
+      context.fillStyle = 'rgba(30,14,23,.1)';
+      context.fillRect(0, 756 + i * 29, 1000, 2);
+    }
+  });
+  if (isEncore(config)) {
+    context.fillStyle = 'rgba(9,12,35,.46)';
+    context.fillRect(0, 0, 1000, 730);
   }
-  context.fillStyle = COLORS.cream;
-  context.beginPath();
-  context.roundRect(700, 770, 120, 120, 16);
-  context.fill();
-  context.strokeStyle = COLORS.navy;
-  context.stroke();
-  context.fillStyle = '#8f5539';
-  context.beginPath();
-  context.ellipse(760, 796, 41, 18, 0, 0, Math.PI * 2);
-  context.fill();
-  context.strokeStyle = 'rgba(255,245,223,0.5)';
-  context.lineWidth = 6;
-  context.beginPath();
-  context.moveTo(742, 742);
-  context.quadraticCurveTo(716, 704, 748, 675);
-  context.stroke();
-  context.restore();
   if (state.target) {
     const position = getTapTargetPosition(state.target, state.tick);
     context.strokeStyle = 'rgba(185,160,255,0.35)';
@@ -584,6 +601,8 @@ function drawTap(
   context.fillStyle = 'rgba(7,23,43,0.82)';
   context.fillRect(25, 22, 420, 82);
   label(context, `HITS ${state.hits}   COMBO ×${state.combo}`, 235, 63, 27);
+  for (let i = 0; i < 8; i++)
+    panel(context, 500 + i * 45, 45, 31, 12, i < state.combo % 9 ? '#edc8b1' : '#655771', 5);
   void config;
 }
 
@@ -602,7 +621,7 @@ function drawClassify(
   state: ClassifyState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#ff8f78', '#ffc463');
+  fillBackground(context, '#d79c77', '#806856');
   context.fillStyle = COLORS.cream;
   context.strokeStyle = COLORS.navy;
   context.lineWidth = 14;
@@ -639,7 +658,7 @@ function drawClassify(
       for (let index = 0; index < 3; index += 1) {
         context.fillRect(155 + index * 14, 250 - index * 12, 690, 380);
       }
-      context.fillStyle = '#e6dcc8';
+      context.fillStyle = material(context, 130, 265, 740, 420, ['#fff9e8', '#f2e6cc', '#d6c3a4']);
       context.shadowColor = 'rgba(7,23,43,0.28)';
       context.shadowBlur = 26;
       context.shadowOffsetY = 14;
@@ -671,6 +690,9 @@ function drawClassify(
       context.fillText(card.sender, 375, 396);
       context.font = '800 30px system-ui';
       context.fillText(card.subject, 190, 560);
+      context.strokeStyle = '#fef8e8';
+      context.lineWidth = 3;
+      context.strokeRect(146, 280, 708, 390);
       context.fillStyle = '#d8cdb6';
       context.fillRect(150, 625, 700, 20);
       context.fillStyle = remaining / total > 0.3 ? COLORS.cyan : COLORS.coral;
@@ -705,24 +727,26 @@ function drawTiming(
   state: TimingState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#111720', '#202936');
-  context.strokeStyle = 'rgba(255,255,255,0.045)';
-  context.lineWidth = 3;
-  for (let x = 0; x < WORLD_WIDTH; x += 125) context.strokeRect(x, 0, 125, 125);
-  context.fillStyle = '#313b45';
-  context.strokeStyle = '#05090e';
-  context.lineWidth = 18;
-  context.beginPath();
-  context.roundRect(75, 100, 850, 780, 42);
-  context.fill();
-  context.stroke();
-  context.fillStyle = 'rgba(255,255,255,0.08)';
-  context.fillRect(108, 126, 780, 12);
-  context.fillStyle = '#111820';
-  context.beginPath();
-  context.roundRect(125, 170, 560, 500, 25);
-  context.fill();
-  context.stroke();
+  staticLayer(context, 'appliance', (context) => {
+    fillBackground(context, '#111720', '#202936');
+    context.strokeStyle = 'rgba(255,255,255,0.045)';
+    context.lineWidth = 3;
+    for (let x = 0; x < WORLD_WIDTH; x += 125) context.strokeRect(x, 0, 125, 125);
+    context.fillStyle = material(context, 75, 100, 850, 780, ['#80949b', '#465966', '#1a303d']);
+    context.strokeStyle = '#05090e';
+    context.lineWidth = 18;
+    context.beginPath();
+    context.roundRect(75, 100, 850, 780, 42);
+    context.fill();
+    context.stroke();
+    context.fillStyle = 'rgba(255,255,255,0.08)';
+    context.fillRect(108, 126, 780, 12);
+    context.fillStyle = '#111820';
+    context.beginPath();
+    context.roundRect(125, 170, 560, 500, 25);
+    context.fill();
+    context.stroke();
+  });
   const glow = context.createRadialGradient(405, 430, 10, 405, 430, 260);
   glow.addColorStop(0, 'rgba(246,223,73,0.45)');
   glow.addColorStop(1, 'rgba(246,223,73,0)');
@@ -737,7 +761,9 @@ function drawTiming(
   context.scale(1, Math.min(1, foodTransform.a / foodTransform.d));
   context.scale(1, 0.56);
   context.rotate(reducedMotion ? 0 : state.timerSeconds * 0.9);
-  context.fillStyle = '#d9854e';
+  ellipse(context, 0, 14, 161, 156, 'rgba(10,21,26,.3)');
+  ellipse(context, 0, 0, 161, 161, '#c9d6c5');
+  context.fillStyle = material(context, -145, -145, 290, 290, ['#f4d384', '#df9f53', '#b76332']);
   context.strokeStyle = COLORS.cream;
   context.lineWidth = 9;
   context.beginPath();
@@ -750,6 +776,18 @@ function drawTiming(
     context.moveTo(0, 0);
     context.lineTo(125, 0);
     context.stroke();
+  }
+  for (let i = 0; i < 38; i++) {
+    const angle = i * 2.4;
+    const r = 25 + ((i * 37) % 105);
+    ellipse(
+      context,
+      Math.cos(angle) * r,
+      Math.sin(angle) * r,
+      2 + (i % 3),
+      2,
+      i % 4 ? '#bd7a3d' : '#68916a',
+    );
   }
   context.fillStyle = '#b44528';
   for (const [x, y] of [
@@ -772,6 +810,15 @@ function drawTiming(
   context.moveTo(445, 325);
   context.quadraticCurveTo(485 - steamSway, 275, 445, 225);
   context.stroke();
+  context.strokeStyle = 'rgba(224,247,247,.12)';
+  context.lineWidth = 24;
+  context.beginPath();
+  context.moveTo(173, 192);
+  context.lineTo(351, 641);
+  context.moveTo(239, 192);
+  context.lineTo(417, 641);
+  context.stroke();
+  panel(context, 646, 310, 20, 204, '#99a9a5', 8);
   context.fillStyle = '#07120c';
   context.beginPath();
   context.roundRect(720, 185, 155, 150, 14);
@@ -782,7 +829,16 @@ function drawTiming(
   context.beginPath();
   context.roundRect(190, 720, 620, 100, 16);
   context.fill();
-  label(context, formatTimer(state.timerSeconds), 500, 770, 56, COLORS.yellow);
+  label(
+    context,
+    concealedTimer(config, state.timerSeconds, state.targetSeconds, state.waitingTicks)
+      ? '··:··.··'
+      : formatTimer(state.timerSeconds),
+    500,
+    770,
+    56,
+    COLORS.yellow,
+  );
   label(
     context,
     `ROUND ${Math.min(state.round, config.targetsSeconds.length)} / ${config.targetsSeconds.length}`,
@@ -809,44 +865,36 @@ function drawSequence(
   state: SequenceState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#0b3344', '#07172b');
-  const brass = context.createLinearGradient(60, 90, 680, 910);
-  brass.addColorStop(0, '#f1df9c');
-  brass.addColorStop(0.5, '#9c783b');
-  brass.addColorStop(1, '#ddc171');
-  context.fillStyle = brass;
-  context.strokeStyle = COLORS.navy;
-  context.lineWidth = 14;
-  context.fillRect(60, 90, 620, 820);
-  context.strokeRect(60, 90, 620, 820);
-  context.fillStyle = '#33434c';
-  context.fillRect(110, 150, 520, 700);
-  context.strokeRect(110, 150, 520, 700);
-  const doorGap = 10 + Math.abs(Math.sin(state.currentFloor * 0.25)) * 8;
-  context.fillStyle = '#71838c';
-  context.fillRect(120, 160, 245 - doorGap, 680);
-  context.fillRect(375 + doorGap, 160, 245 - doorGap, 680);
-  context.strokeStyle = '#b8c8cf';
-  context.lineWidth = 5;
-  for (let y = 200; y < 840; y += 65) {
-    context.beginPath();
-    context.moveTo(130, y);
-    context.lineTo(610, y);
-    context.stroke();
-  }
-  const doorSheen = context.createLinearGradient(135, 0, 580, 0);
-  doorSheen.addColorStop(0, 'rgba(255,255,255,0)');
-  doorSheen.addColorStop(0.5, 'rgba(255,255,255,0.16)');
-  doorSheen.addColorStop(1, 'rgba(255,255,255,0)');
-  context.fillStyle = doorSheen;
-  context.fillRect(130, 165, 475, 665);
-  for (let index = 0; index < 8; index += 1) {
-    const lit = reducedMotion ? index === 0 : (index + Math.floor(state.tick / 5)) % 8 === 0;
-    context.fillStyle = lit ? COLORS.yellow : 'rgba(247,239,220,0.18)';
-    context.beginPath();
-    context.arc(85, 190 + index * 82, lit ? 9 : 5, 0, Math.PI * 2);
-    context.fill();
-  }
+  staticLayer(context, 'lift-room', (context) => {
+    fillBackground(context, '#1f4957', '#112c39');
+    for (let x = 0; x < 1000; x += 100) {
+      context.strokeStyle = 'rgba(155,199,193,.08)';
+      context.lineWidth = 2;
+      context.strokeRect(x, 0, 100, 1000);
+    }
+    brassCab(context);
+  });
+  const open =
+    !reducedMotion && state.signature?.kind === 'note'
+      ? Math.max(0, 1 - Math.abs(state.tick - state.signature.tick - 12) / 12) * 36
+      : 0;
+  context.save();
+  context.beginPath();
+  context.rect(105, 149, 525, 710);
+  context.clip();
+  context.save();
+  context.translate(-open, 0);
+  staticLayer(context, 'door-left', (c) => elevatorDoors(c, 0, [-1]));
+  context.restore();
+  context.save();
+  context.translate(open, 0);
+  staticLayer(context, 'door-right', (c) => elevatorDoors(c, 0, [1]));
+  context.restore();
+  context.restore();
+  label(context, '♪', 365, 108, 32, '#e9c987');
+  ellipse(context, 85, 825 - (state.currentFloor - 1) * 77, 5, 12, '#f4dba6');
+  for (let i = 0; i < config.sequenceLength; i++)
+    ellipse(context, 140 + i * 39, 880, 5, 5, i < state.hits ? '#f1d49b' : '#496270');
   context.fillStyle = '#091015';
   context.beginPath();
   context.roundRect(720, 105, 220, 250, 22);
@@ -858,7 +906,10 @@ function drawSequence(
   const required = state.requests[state.requestIndex];
   label(context, 'NEXT NOTES', 830, 420, 22, COLORS.cream);
   state.requests.slice(state.requestIndex, state.requestIndex + 4).forEach((floor, index) => {
-    context.fillStyle = index === 0 ? COLORS.yellow : '#183f4e';
+    context.fillStyle =
+      index === 0
+        ? material(context, 730, 455, 88, 82, ['#fff1c3', '#dfc58c', '#b6995d'])
+        : '#31525d';
     context.beginPath();
     context.roundRect(730 + (index % 2) * 105, 455 + Math.floor(index / 2) * 105, 88, 82, 12);
     context.fill();
@@ -908,7 +959,12 @@ function drawGarment(
   const transform = context.getTransform();
   context.scale(1, Math.min(1, Math.abs(transform.a / transform.d)));
   context.rotate(reducedMotion ? 0 : Math.sin(tick * 0.11 + y * 0.018) * 0.13);
-  context.fillStyle = color;
+  ellipse(context, 0, 108, 75, 13, 'rgba(12,34,41,.18)');
+  context.fillStyle = material(context, -80, -85, 160, 185, [
+    color,
+    color,
+    dark ? '#162c43' : '#c8b79a',
+  ]);
   context.strokeStyle = dark ? COLORS.cream : COLORS.navy;
   context.lineWidth = 10;
   if (token.includes('shirt')) {
@@ -956,94 +1012,125 @@ function drawSort(
   state: SortState,
   reducedMotion: boolean,
 ): void {
-  fillBackground(context, '#dff3e4', '#7de3a1');
-  context.fillStyle = '#d6f0f1';
-  context.fillRect(0, 0, 1_000, 760);
-  context.strokeStyle = '#bddadc';
-  context.lineWidth = 6;
-  for (let x = 0; x < 1_000; x += 125) {
-    context.strokeRect(x, 0, 125, 125);
-  }
-  context.fillStyle = '#86a896';
-  context.fillRect(350, 135, 560, 18);
-  for (const [x, color, height] of [
-    [420, COLORS.cyan, 92],
-    [560, COLORS.coral, 120],
-    [710, COLORS.yellow, 82],
-  ] as const) {
+  staticLayer(context, 'laundrette', (context) => {
+    fillBackground(context, '#dff3e4', '#7de3a1');
+    context.fillStyle = '#d6f0f1';
+    context.fillRect(0, 0, 1_000, 760);
+    context.strokeStyle = '#bddadc';
+    context.lineWidth = 6;
+    for (let x = 0; x < 1_000; x += 125) {
+      context.strokeRect(x, 0, 125, 125);
+    }
+    context.fillStyle = '#86a896';
+    context.fillRect(350, 135, 560, 18);
+    for (const [x, color, height] of [
+      [420, COLORS.cyan, 92],
+      [560, COLORS.coral, 120],
+      [710, COLORS.yellow, 82],
+    ] as const) {
+      context.save();
+      preserveObjectAspect(context, x + 35, 135);
+      context.fillStyle = color;
+      context.strokeStyle = COLORS.navy;
+      context.lineWidth = 8;
+      context.beginPath();
+      context.roundRect(x, 135 - height, 70, height, 12);
+      context.fill();
+      context.stroke();
+      context.restore();
+    }
     context.save();
-    preserveObjectAspect(context, x + 35, 135);
-    context.fillStyle = color;
+    preserveObjectAspect(context, 170, 275);
+    context.fillStyle = COLORS.cream;
     context.strokeStyle = COLORS.navy;
-    context.lineWidth = 8;
+    context.lineWidth = 13;
     context.beginPath();
-    context.roundRect(x, 135 - height, 70, height, 12);
+    context.roundRect(55, 120, 230, 310, 34);
     context.fill();
     context.stroke();
+    context.beginPath();
+    context.arc(170, 290, 82, 0, Math.PI * 2);
+    context.stroke();
+    context.fillStyle = COLORS.cyan;
+    context.beginPath();
+    context.arc(170, 290, 68, 0, Math.PI * 2);
+    context.fill();
+    context.save();
+    context.translate(170, 290);
+    context.rotate(0);
+    context.strokeStyle = 'rgba(247,239,220,0.72)';
+    context.lineWidth = 9;
+    for (let arm = 0; arm < 3; arm += 1) {
+      context.rotate((Math.PI * 2) / 3);
+      context.beginPath();
+      context.moveTo(0, 0);
+      context.lineTo(45, 0);
+      context.stroke();
+    }
     context.restore();
-  }
+    context.restore();
+    context.fillStyle = '#f0eadc';
+    context.strokeStyle = COLORS.navy;
+    context.lineWidth = 13;
+    context.beginPath();
+    context.moveTo(55, 1_000);
+    context.lineTo(55, 760);
+    context.lineTo(440, 690);
+    context.lineTo(465, 1_000);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.fillStyle = '#28344a';
+    context.beginPath();
+    context.moveTo(535, 1_000);
+    context.lineTo(560, 690);
+    context.lineTo(945, 760);
+    context.lineTo(945, 1_000);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.save();
+    context.strokeStyle = 'rgba(145,130,100,0.55)';
+    context.lineWidth = 8;
+    for (let row = 0; row < 4; row += 1) {
+      context.beginPath();
+      context.moveTo(75, 790 + row * 48);
+      context.lineTo(430, 725 + row * 60);
+      context.moveTo(570, 725 + row * 60);
+      context.lineTo(925, 790 + row * 48);
+      context.stroke();
+    }
+    context.restore();
+  });
   context.save();
-  preserveObjectAspect(context, 170, 275);
-  context.fillStyle = COLORS.cream;
-  context.strokeStyle = COLORS.navy;
-  context.lineWidth = 13;
-  context.beginPath();
-  context.roundRect(55, 120, 230, 310, 34);
-  context.fill();
-  context.stroke();
-  context.beginPath();
-  context.arc(170, 290, 82, 0, Math.PI * 2);
-  context.stroke();
-  context.fillStyle = COLORS.cyan;
-  context.beginPath();
-  context.arc(170, 290, 68, 0, Math.PI * 2);
-  context.fill();
-  context.save();
+  preserveObjectAspect(context, 170, 290);
   context.translate(170, 290);
-  context.rotate(reducedMotion ? 0 : state.tick * 0.05);
-  context.strokeStyle = 'rgba(247,239,220,0.72)';
-  context.lineWidth = 9;
-  for (let arm = 0; arm < 3; arm += 1) {
-    context.rotate((Math.PI * 2) / 3);
-    context.beginPath();
-    context.moveTo(0, 0);
-    context.lineTo(45, 0);
-    context.stroke();
+  context.rotate(reducedMotion ? 0 : state.tick * (state.combo >= 8 ? 0.16 : 0.04));
+  for (let i = 0; i < 5; i++) {
+    context.rotate((Math.PI * 2) / 5);
+    ellipse(context, 47, 0, 5, 9, state.combo >= 8 ? '#fff1b5' : '#5bb7bd');
   }
   context.restore();
-  context.restore();
-  context.fillStyle = '#f0eadc';
-  context.strokeStyle = COLORS.navy;
-  context.lineWidth = 13;
-  context.beginPath();
-  context.moveTo(55, 1_000);
-  context.lineTo(55, 760);
-  context.lineTo(440, 690);
-  context.lineTo(465, 1_000);
-  context.closePath();
-  context.fill();
-  context.stroke();
-  context.fillStyle = '#28344a';
-  context.beginPath();
-  context.moveTo(535, 1_000);
-  context.lineTo(560, 690);
-  context.lineTo(945, 760);
-  context.lineTo(945, 1_000);
-  context.closePath();
-  context.fill();
-  context.stroke();
-  context.save();
-  context.strokeStyle = 'rgba(145,130,100,0.55)';
-  context.lineWidth = 8;
-  for (let row = 0; row < 4; row += 1) {
-    context.beginPath();
-    context.moveTo(75, 790 + row * 48);
-    context.lineTo(430, 725 + row * 60);
-    context.moveTo(570, 725 + row * 60);
-    context.lineTo(925, 790 + row * 48);
-    context.stroke();
+  if (state.signature?.kind === 'basket' && state.tick - state.signature.tick < 25) {
+    const age = (state.tick - state.signature.tick) / 25;
+    const side = state.signature.side ?? 1;
+    const x = reducedMotion ? 500 + side * 240 : 500 + side * 240 * (1 - (1 - age) ** 3);
+    const y = reducedMotion ? 775 : 570 + age * age * 240;
+    context.save();
+    context.globalAlpha = 1 - age;
+    drawGarment(
+      context,
+      state.signature.token ?? 'white-sock',
+      x,
+      y,
+      reducedMotion ? 0 : state.tick,
+      reducedMotion,
+    );
+    context.restore();
+    context.strokeStyle = '#e3b76e';
+    context.lineWidth = 7;
+    context.strokeRect(side < 0 ? 63 : 550, 710, 385, 35);
   }
-  context.restore();
   if (state.currentItemIndex !== null) {
     const item = config.items[state.currentItemIndex];
     if (item)
@@ -1052,7 +1139,7 @@ function drawSort(
         item.token,
         500,
         210 + state.itemProgress * 470,
-        state.tick,
+        state.combo >= 8 ? state.tick * 1.5 : state.tick,
         reducedMotion,
       );
   }
@@ -1098,6 +1185,8 @@ export function renderGameScene(
     drawSort(context, config, state, reducedMotion);
   else throw new Error('Renderer received mismatched engine data.');
   context.restore();
-  finishScene(context, COLORS[config.palette]);
-  feedbackEffects(context, state, reducedMotion);
+  staticLayer(context, `finish-${config.palette}`, (c) => finishScene(c, COLORS[config.palette]));
+  if (state.feedback === 'bad' || !state.signature || state.tick - state.signature.tick > 32)
+    feedbackEffects(context, state, reducedMotion);
+  if (state.feedback !== 'bad') drawSignature(context, state.signature, state.tick, reducedMotion);
 }

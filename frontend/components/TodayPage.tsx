@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { DAILY_CONFIGS, type DailyGameConfig } from '@shared/game';
+import { GameIcon } from './GameIcon';
+import type { DailyCard } from '@frontend/lib/mastery-storage';
 import { DailyPoster } from './DailyPoster';
 
 interface TodayPageProps {
@@ -9,6 +11,8 @@ interface TodayPageProps {
   countdown: string;
   bestScore: number;
   streak: number;
+  longestStreak: number;
+  deck: DailyCard[];
   selectedVote: string | undefined;
   onPlay: () => void;
   onVote: (candidateId: string) => boolean;
@@ -136,6 +140,36 @@ export function TodayPage(props: TodayPageProps) {
             {streak} day{streak === 1 ? '' : 's'}
           </strong>
         </div>
+      </section>
+
+      <section className="daily-deck" aria-label="Daily Deck on this device">
+        <div className="deck-heading">
+          <strong>Daily Deck</strong>
+          <span>Longest streak · {props.longestStreak} days</span>
+        </div>
+        {props.deck.length === 0 ? (
+          <p>Your first card is one run away.</p>
+        ) : (
+          <ol>
+            {props.deck.slice(-7).map((card) => {
+              const game = DAILY_CONFIGS.find((c) => c.id === card.gameId);
+              return game ? (
+                <li
+                  key={`${card.day}:${card.gameId}`}
+                  data-medal={card.medal}
+                  title={`${game.title} · ${card.date} · ${card.medal}`}
+                >
+                  <GameIcon engine={game.engine} />
+                  <span>#{card.day}</span>
+                  <b>{card.medal}</b>
+                  <span className="sr-only">
+                    {game.title}, {card.date}
+                  </span>
+                </li>
+              ) : null;
+            })}
+          </ol>
+        )}
       </section>
 
       {props.hasPlayedToday && (

@@ -16,6 +16,25 @@ class MemoryStorage {
 }
 
 describe('versioned prototype storage', () => {
+  it('migrates existing streak and preferences without losing older scores', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        bestScores: { samosa: 420 },
+        preferences: { soundEnabled: true },
+        stats: { streak: 7, lastPlayedDate: '2026-10-29' },
+      }),
+    );
+    const state = loadPrototypeState(storage);
+    expect(state.stats.longestStreak).toBe(7);
+    expect(state.preferences.soundEnabled).toBe(true);
+    expect(state.bestScores.samosa).toBe(420);
+    state.stats.streak = 1;
+    savePrototypeState(storage, state);
+    expect(loadPrototypeState(storage).stats.longestStreak).toBe(7);
+  });
   it('recovers from corrupt data and reports it', () => {
     const storage = new MemoryStorage();
     const report = vi.fn();

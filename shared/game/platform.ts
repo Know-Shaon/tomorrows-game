@@ -6,6 +6,7 @@ import { createSortState, stepSortGame } from './sort-engine';
 import { createTapState, stepTapGame } from './tap-engine';
 import { createTimingState, stepTimingGame } from './timing-engine';
 import type { DailyGameConfig, DailyGameInput, DailyGameState } from './types';
+import { signatureForTransition } from './signature';
 
 export function createDailyGameState(config: DailyGameConfig): DailyGameState {
   switch (config.engine) {
@@ -27,6 +28,17 @@ export function createDailyGameState(config: DailyGameConfig): DailyGameState {
 }
 
 export function stepDailyGame(
+  state: DailyGameState,
+  input: DailyGameInput,
+  config: DailyGameConfig,
+): DailyGameState {
+  const next = dispatchStep(state, input, config);
+  if (next === state) return state;
+  const signature = signatureForTransition(state, next, config, input);
+  return signature ? { ...next, signature } : next;
+}
+
+function dispatchStep(
   state: DailyGameState,
   input: DailyGameInput,
   config: DailyGameConfig,
